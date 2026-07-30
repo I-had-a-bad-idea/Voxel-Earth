@@ -1,4 +1,7 @@
+#define SDL_MAIN_HANDLED
+
 #include <enet/enet.h>
+#include <SDL2/SDL.h>
 #include <external/Rasterization-Renderer/main.h>
 #include <stdio.h>
 #include "World-Scene/world.h"
@@ -17,7 +20,7 @@ int main(void)
     // Start renderer loop
     Run(render_target, world);
     
-    return 0;
+    // return 0;
 
     if (enet_initialize() != 0)
     {
