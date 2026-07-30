@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Win64",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:/msys64/mingw64/include/",
+                "${workspaceFolder}/external/Raterization-Renderer/Helper",
+                "${workspaceFolder}/external/Raterization-Renderer/Math",
+                "${workspaceFolder}/external/Raterization-Renderer/Object",
+                "${workspaceFolder}/external/Raterization-Renderer/Rendering",
+                "${workspaceFolder}/external/Raterization-Renderer/Scenes"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.26100.0",
+            "compilerPath": "C:/msys64/ucrt64/bin/gcc.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}
