@@ -2,7 +2,7 @@ CC = gcc
 
 ENET_DIR = external/enet
 
-CFLAGS = -I$(ENET_DIR)/include -Wall -Wextra -g
+CFLAGS = -I$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g
 
 ENET_SRC = \
 	$(ENET_DIR)/callbacks.c \
