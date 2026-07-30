@@ -1,8 +1,24 @@
 #include <enet/enet.h>
+#include <external/Rasterization-Renderer/main.h>
 #include <stdio.h>
+#include "World-Scene/world.h"
+
 
 int main(void)
 {
+    // Define render target size
+    int width = 960;
+    int height = 540;
+    // Create scene
+    World world;
+    world.Setup(); 
+    // Create render target
+    RenderTarget render_target(width, height);
+    // Start renderer loop
+    Run(render_target, world);
+    
+    return 0;
+
     if (enet_initialize() != 0)
     {
         puts("Couldn't initialize ENet");

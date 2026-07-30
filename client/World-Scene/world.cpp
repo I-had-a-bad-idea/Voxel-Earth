@@ -1,0 +1,58 @@
+#include "World.h"
+#include <SDL2/SDL.h>
+
+// Set up scene with objects and camera
+void World::Setup() {
+    Object floor(ObjLoader::load_object("/external/Raterization-Renderer/Objects/Plane.obj", "/external/Raterization-Renderer/Textures/Grass.png",
+        float3(0, -2, 1), float3(0, 0, 0), "floor"));
+    Object monkey(ObjLoader::load_object("/external/Raterization-Renderer/Objects/Monkey.obj", "/external/Raterization-Renderer/Textures/Metal_golden.png",
+        float3(0, 0, 3), float3(0, 3.141592, 0), "monkey"));
+    Object cube(ObjLoader::load_object("/external/Raterization-Renderer/Objects/Cube.obj", "/external/Raterization-Renderer/Textures/Metal_golden.png",
+        float3(3, 2, 5), float3(0, 0, 0), "cube"));
+    Object sphere(ObjLoader::load_object("/external/Raterization-Renderer/Objects/Sphere.obj", "/external/Raterization-Renderer/Textures/Gravel.png",
+        float3(-3, 2, -5), float3(0, 0, 0), "sphere"));
+    camera.Fov = 60;
+    objects = { floor, monkey, cube, sphere };
+}
+
+// Simple scene update: handle input and animate objects
+void World::Update(RenderTarget& target, float delta_time) {
+    const float mouse_sensitivity = 2.0f;
+    ObjectTransform& camera_transform(camera.CamTransform);
+
+    // Mouse handling (always relative)
+    int dx, dy;
+    SDL_GetRelativeMouseState(&dx, &dy);
+
+    float2 mouse_delta(
+        static_cast<float>(dx) / target.Width * mouse_sensitivity,
+        static_cast<float>(dy) / target.Width * mouse_sensitivity
+    );
+
+    float3 rot = camera_transform.GetRotation();
+    rot.x = std::clamp(rot.x - mouse_delta.y,
+                       Math::degrees_to_radians(-85),
+                       Math::degrees_to_radians(85));
+    rot.y -= mouse_delta.x;
+    camera_transform.SetRotation(rot);
+
+    // Keyboard handling
+    const float camera_speed = 5.0f;
+    const Uint8* keyState = SDL_GetKeyboardState(nullptr);
+
+    float3 move_delta(0, 0, 0);
+    auto [cam_right, cam_up, cam_forward] = camera_transform.GetBasisVectors();
+
+    if (keyState[SDL_SCANCODE_W]) move_delta += cam_forward;
+    if (keyState[SDL_SCANCODE_S]) move_delta -= cam_forward;
+    if (keyState[SDL_SCANCODE_A]) move_delta -= cam_right;
+    if (keyState[SDL_SCANCODE_D]) move_delta += cam_right;
+
+    // Move camera based on input
+    camera_transform.SetPosition(
+        camera_transform.GetPosition() + move_delta * camera_speed * delta_time
+    );
+    float3 new_rotation(objects[2].Obj_Transform.GetRotation() + float3(5, 0, 0) * delta_time);
+    objects[2].Obj_Transform.SetRotation(new_rotation);
+
+}
