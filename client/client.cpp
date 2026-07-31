@@ -18,7 +18,7 @@ int main(void)
     // Create render target
     RenderTarget render_target(width, height);
     // Start renderer loop
-    Run(render_target, world);
+    Run("Voxel Engine", render_target, world);
     
     // return 0;
 
