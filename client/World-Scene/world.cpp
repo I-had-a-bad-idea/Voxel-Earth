@@ -3,13 +3,17 @@
 
 // Set up scene with objects and camera
 void World::Setup() {
-    Object floor(ObjLoader::load_object("/external/Rasterization-Renderer/Objects/Plane.obj", "/external/Rasterization-Renderer/Textures/Grass.png",
+    Object floor(ObjLoader::load_object("/external/Rasterization-Renderer/assets/Objects/Plane.obj",
+        "/external/Rasterization-Renderer/assets/Textures/Grass.png",
         float3(0, -2, 1), float3(0, 0, 0), "floor"));
-    Object monkey(ObjLoader::load_object("/external/Rasterization-Renderer/Objects/Monkey.obj", "/external/Rasterization-Renderer/Textures/Metal_golden.png",
+    Object monkey(ObjLoader::load_object("/external/Rasterization-Renderer/assets/Objects/Monkey.obj",
+        "/external/Rasterization-Renderer/assets/Textures/Metal_golden.png",
         float3(0, 0, 3), float3(0, 3.141592, 0), "monkey"));
-    Object cube(ObjLoader::load_object("/external/Rasterization-Renderer/Objects/Cube.obj", "/external/Rasterization-Renderer/Textures/Metal_golden.png",
+    Object cube(ObjLoader::load_object("/external/Rasterization-Renderer/assets/Objects/Cube.obj",
+        "/external/Rasterization-Renderer/assets/Textures/Metal_golden.png",
         float3(3, 2, 5), float3(0, 0, 0), "cube"));
-    Object sphere(ObjLoader::load_object("/external/Rasterization-Renderer/Objects/Sphere.obj", "/external/Rasterization-Renderer/Textures/Gravel.png",
+    Object sphere(ObjLoader::load_object("/external/Rasterization-Renderer/assets/Objects/Sphere.obj",
+        "/external/Rasterization-Renderer/assets/Textures/Gravel.png",
         float3(-3, 2, -5), float3(0, 0, 0), "sphere"));
     camera.Fov = 60;
     objects = { floor, monkey, cube, sphere };

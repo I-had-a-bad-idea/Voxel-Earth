@@ -21,26 +21,17 @@ ENET_SRC = \
 RENDERER_DIR = external/Rasterization-Renderer
 
 RENDERER_INCLUDE = \
-	-I$(RENDERER_DIR)/Helper \
-	-I$(RENDERER_DIR)/Math \
-	-I$(RENDERER_DIR)/Object \
-	-I$(RENDERER_DIR)/Rendering \
-	-I$(RENDERER_DIR)/Scenes \
-	-I$(RENDERER_DIR)/Textures
+	-I$(RENDERER_DIR)/src/Helper \
+	-I$(RENDERER_DIR)/src/Math \
+	-I$(RENDERER_DIR)/src/Object \
+	-I$(RENDERER_DIR)/src/Rendering \
+	-I$(RENDERER_DIR)/src/Scenes \
+	-I$(RENDERER_DIR)/src/Textures
 
 
 SDL_DIR = C:/msys64/ucrt64
 SDL_INCLUDE = -I$(SDL_DIR)/include
 SDL_LIB = -L$(SDL_DIR)/lib
-
-RENDERER_SRC = \
-	$(wildcard $(RENDERER_DIR)/*.cpp) \
-	$(wildcard $(RENDERER_DIR)/Helper/*.cpp) \
-	$(wildcard $(RENDERER_DIR)/Math/*.cpp) \
-	$(wildcard $(RENDERER_DIR)/Object/*.cpp) \
-	$(wildcard $(RENDERER_DIR)/Rendering/*.cpp) \
-	$(wildcard $(RENDERER_DIR)/Scenes/*.cpp)
-
 
 CLIENT_DIR = client
 
@@ -62,7 +53,8 @@ client.exe: ${CLIENT_SRC} $(RENDERER_SRC)
 		$(RENDERER_INCLUDE) \
 		${CLIENT_SRC} \
 		$(ENET_SRC) \
-		$(RENDERER_SRC) \
+		-L${RENDERER_DIR} \
+		-lRasterizationRenderer \
 		-lws2_32 \
 		-lwinmm \
 		-lSDL2 \

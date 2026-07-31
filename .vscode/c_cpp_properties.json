@@ -5,11 +5,11 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "C:/msys64/mingw64/include/",
-                "${workspaceFolder}/external/Rasterization-Renderer/Helper",
-                "${workspaceFolder}/external/Rasterization-Renderer/Math",
-                "${workspaceFolder}/external/Rasterization-Renderer/Object",
-                "${workspaceFolder}/external/Rasterization-Renderer/Rendering",
-                "${workspaceFolder}/external/Rasterization-Renderer/Scenes"
+                "${workspaceFolder}/external/Rasterization-Renderer/src/Helper",
+                "${workspaceFolder}/external/Rasterization-Renderer/src/Math",
+                "${workspaceFolder}/external/Rasterization-Renderer/src/Object",
+                "${workspaceFolder}/external/Rasterization-Renderer/src/Rendering",
+                "${workspaceFolder}/external/Rasterization-Renderer/src/Scenes"
             ],
             "defines": [
                 "_DEBUG",

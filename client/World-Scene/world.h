@@ -1,7 +1,7 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <external/Rasterization-Renderer/Scenes/Scene.h>
+#include <external/Rasterization-Renderer/src/Scenes/Scene.h>
 
 class World : public Scene{
     public:
