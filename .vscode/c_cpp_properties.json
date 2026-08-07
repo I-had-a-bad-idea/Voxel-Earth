@@ -4,12 +4,9 @@
             "name": "Win64",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C:/msys64/mingw64/include/",
-                "${workspaceFolder}/external/Rasterization-Renderer/src/Helper",
-                "${workspaceFolder}/external/Rasterization-Renderer/src/Math",
-                "${workspaceFolder}/external/Rasterization-Renderer/src/Object",
-                "${workspaceFolder}/external/Rasterization-Renderer/src/Rendering",
-                "${workspaceFolder}/external/Rasterization-Renderer/src/Scenes"
+                "${workspaceFolder}/external/",
+                "${workspaceFolder}/external/VulkanGraphicsLib/include/",
+                "C:/VulkanSDK/1.4.357.0/include/"
             ],
             "defines": [
                 "_DEBUG",

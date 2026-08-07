@@ -1,27 +1,40 @@
 #define SDL_MAIN_HANDLED
 
 #include <enet/enet.h>
-#include <SDL2/SDL.h>
-#include <external/Rasterization-Renderer/main.h>
+#include <SDL3/SDL.h>
+#include <external/VulkanGraphicsLib/include/renderer.h>
 #include <stdio.h>
 #include "World-Scene/world.h"
 
 
 int main(void)
 {
-    // Define render target size
+    // Define window size
     int width = 960;
     int height = 540;
+
+    // Create renderer
+    Renderer renderer("Voxel Engine", width, height);
+
     // Create scene
     World world;
-    world.Setup(); 
-    // Create render target
-    RenderTarget render_target(width, height);
-    // Start renderer loop
-    Run("Voxel Engine", render_target, world);
-    
-    // return 0;
+    world.setup(renderer);
 
+    bool quit = false;
+    // Start renderer loop
+    while(!quit) {
+        renderer.render_scene(world.get_scene());
+
+
+        for (SDL_Event event; SDL_PollEvent(&event);) {
+            // Exit loop if the application is about to close
+            if (event.type == SDL_EVENT_QUIT) {
+                quit = true;
+                break;
+            }
+        }
+    }
+    
     if (enet_initialize() != 0)
     {
         puts("Couldn't initialize ENet");

@@ -1,12 +1,15 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <external/Rasterization-Renderer/src/Scenes/Scene.h>
+#include <external/VulkanGraphicsLib/include/object.h>
+#include <external/VulkanGraphicsLib/include/renderer.h>
 
-class World : public Scene{
+class World {
+    Scene scene;
+    
     public:
-        void Update(RenderTarget& target, float delta_time);
-        void Setup();
+        void setup(Renderer& renderer);
+        const Scene& get_scene();
 };
 
 

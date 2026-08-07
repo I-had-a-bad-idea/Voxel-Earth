@@ -1,11 +1,20 @@
-CXX = C:\msys64\ucrt64\bin\g++.exe
-CC  = C:\msys64\ucrt64\bin\gcc.exe
+CXX = g++
+CC  = gcc
 
 ENET_DIR = external/enet
 
 CFLAGS = -I$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g
 
-LIBS = -lws2_32 -lwinmm
+LIBS = \
+	-lws2_32 \
+	-lwinmm \
+	-L$(VULKAN_SDK)/Lib \
+	-Lexternal/VulkanGraphicsLib \
+	-lvulkan-1 \
+	-l:VulkanGraphicsLib.a \
+	-lSDL3 \
+	-lslang
+
 
 ENET_SRC = \
 	$(ENET_DIR)/callbacks.c \
@@ -17,21 +26,16 @@ ENET_SRC = \
 	$(ENET_DIR)/protocol.c \
 	$(ENET_DIR)/win32.c
 
-# Renderer submodule
-RENDERER_DIR = external/Rasterization-Renderer
+VULKAN_GRAPHICS_LIB = external/VulkanGraphicsLib
 
-RENDERER_INCLUDE = \
-	-I$(RENDERER_DIR)/src/Helper \
-	-I$(RENDERER_DIR)/src/Math \
-	-I$(RENDERER_DIR)/src/Object \
-	-I$(RENDERER_DIR)/src/Rendering \
-	-I$(RENDERER_DIR)/src/Scenes \
-	-I$(RENDERER_DIR)/src/Textures
+VULKAN_GRAPHICS_LIB_INCLUDE = \
+	-I$(VULKAN_GRAPHICS_LIB)/include \
+	-I$(VULKAN_GRAPHICS_LIB)/external/ \
+	-I$(VULKAN_GRAPHICS_LIB)/external/ktx/include \
+	-I$(VULKAN_GRAPHICS_LIB)/external/ktx/other_include
 
 
-SDL_DIR = C:/msys64/ucrt64
-SDL_INCLUDE = -I$(SDL_DIR)/include
-SDL_LIB = -L$(SDL_DIR)/lib
+VULKAN_SDK = C:/VulkanSDK/1.4.357.0
 
 CLIENT_DIR = client
 
@@ -45,23 +49,14 @@ all: server.exe client.exe
 server.exe: server/server.c
 	$(CC) $(CFLAGS) server/server.c $(ENET_SRC) $(LIBS) -o server.exe
 
-client.exe: ${CLIENT_SRC} $(RENDERER_SRC)
+client.exe: ${CLIENT_SRC}
 	${CXX} $(CFLAGS) \
-		-I. \
-		${SDL_LIB} \
-		$(SDL_INCLUDE) \
-		$(RENDERER_INCLUDE) \
 		${CLIENT_SRC} \
+		-I. \
+		$(VULKAN_GRAPHICS_LIB_INCLUDE) \
+		-I$(VULKAN_SDK)/Include \
 		$(ENET_SRC) \
-		-L${RENDERER_DIR} \
-		-lRasterizationRenderer \
-		-lws2_32 \
-		-lwinmm \
-		-lSDL2 \
-		-lSDL2_image \
-		-lopengl32 \
-		-lgdi32 \
-		-mconsole \
+		${LIBS} \
 		-o client.exe
 
 server: server.exe

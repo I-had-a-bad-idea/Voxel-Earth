@@ -1,62 +1,25 @@
 #include "World.h"
-#include <SDL2/SDL.h>
 
-// Set up scene with objects and camera
-void World::Setup() {
-    Object floor(ObjLoader::load_object("/external/Rasterization-Renderer/assets/Objects/Plane.obj",
-        "/external/Rasterization-Renderer/assets/Textures/Grass.png",
-        float3(0, -2, 1), float3(0, 0, 0), "floor"));
-    Object monkey(ObjLoader::load_object("/external/Rasterization-Renderer/assets/Objects/Monkey.obj",
-        "/external/Rasterization-Renderer/assets/Textures/Metal_golden.png",
-        float3(0, 0, 3), float3(0, 3.141592, 0), "monkey"));
-    Object cube(ObjLoader::load_object("/external/Rasterization-Renderer/assets/Objects/Cube.obj",
-        "/external/Rasterization-Renderer/assets/Textures/Metal_golden.png",
-        float3(3, 2, 5), float3(0, 0, 0), "cube"));
-    Object sphere(ObjLoader::load_object("/external/Rasterization-Renderer/assets/Objects/Sphere.obj",
-        "/external/Rasterization-Renderer/assets/Textures/Gravel.png",
-        float3(-3, 2, -5), float3(0, 0, 0), "sphere"));
-    camera.Fov = 60;
-    objects = { floor, monkey, cube, sphere };
+
+void World::setup(Renderer& renderer) {
+    // Load meshes, textures and shaders
+    std::cout << "Loading resources...\n";
+    Mesh cube_mesh = renderer.load_mesh("external/VulkanGraphicsLib/assets/monkey.obj"); // Currently only .obj is supported
+    Texture gravel_texture = renderer.load_texture("external/VulkanGraphicsLib/assets/Textures/Gravel.ktx"); // Currently only .ktx (as it is a format the GPU likes)
+    std::cout << "Loading shader...\n";
+    Shader shader = renderer.load_shader("external/VulkanGraphicsLib/assets/shader.slang"); // The slang compiler is included in the library and shaders will be compiled when loaded
+    std::cout << "Creating material...\n";
+    // Create a material for gravel
+    Material gravel_material(&gravel_texture, &shader); // Create a material from a texture and a shader
+
+    // Create object(s) (mesh, material, position, rotation)
+    Object cube(&cube_mesh, &gravel_material, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f)); 
+
+    // add objects to scene
+    std::cout << "Adding object(s) to scene...\n";
+    scene.add_object_to_scene(&cube);
 }
 
-// Simple scene update: handle input and animate objects
-void World::Update(RenderTarget& target, float delta_time) {
-    const float mouse_sensitivity = 2.0f;
-    ObjectTransform& camera_transform(camera.CamTransform);
-
-    // Mouse handling (always relative)
-    int dx, dy;
-    SDL_GetRelativeMouseState(&dx, &dy);
-
-    float2 mouse_delta(
-        static_cast<float>(dx) / target.Width * mouse_sensitivity,
-        static_cast<float>(dy) / target.Width * mouse_sensitivity
-    );
-
-    float3 rot = camera_transform.GetRotation();
-    rot.x = std::clamp(rot.x - mouse_delta.y,
-                       Math::degrees_to_radians(-85),
-                       Math::degrees_to_radians(85));
-    rot.y -= mouse_delta.x;
-    camera_transform.SetRotation(rot);
-
-    // Keyboard handling
-    const float camera_speed = 5.0f;
-    const Uint8* keyState = SDL_GetKeyboardState(nullptr);
-
-    float3 move_delta(0, 0, 0);
-    auto [cam_right, cam_up, cam_forward] = camera_transform.GetBasisVectors();
-
-    if (keyState[SDL_SCANCODE_W]) move_delta += cam_forward;
-    if (keyState[SDL_SCANCODE_S]) move_delta -= cam_forward;
-    if (keyState[SDL_SCANCODE_A]) move_delta -= cam_right;
-    if (keyState[SDL_SCANCODE_D]) move_delta += cam_right;
-
-    // Move camera based on input
-    camera_transform.SetPosition(
-        camera_transform.GetPosition() + move_delta * camera_speed * delta_time
-    );
-    float3 new_rotation(objects[2].Obj_Transform.GetRotation() + float3(5, 0, 0) * delta_time);
-    objects[2].Obj_Transform.SetRotation(new_rotation);
-
+const Scene& World::get_scene() {
+    return scene;
 }
