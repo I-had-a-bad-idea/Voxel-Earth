@@ -7,6 +7,6 @@ Noise::Noise(int seed, float frequency) {
     noise.SetFrequency(frequency);
 }
 
-float Noise::at(int x, int y) {
+float Noise::at(float x, float y) {
     return noise.GetNoise(x, y);
 }

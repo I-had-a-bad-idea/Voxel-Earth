@@ -6,7 +6,7 @@
 class Noise {
     public:
         Noise(int seed, float frequency);
-        float at(int x, int y);
+        float at(float x, float y);
         // TODO: add a lot more configuration possibilities
 
 

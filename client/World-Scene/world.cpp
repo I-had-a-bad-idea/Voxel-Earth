@@ -1,8 +1,10 @@
 #include "World.h"
 
+World::World() 
+    : noise(1234, 0.01f)
+{}
 
 void World::setup(Renderer& renderer) {
-    noise = Noise(1234, 0.01f);
     
     std::cout << "Loading resources...\n";
     cube_mesh = std::make_unique<Mesh>(

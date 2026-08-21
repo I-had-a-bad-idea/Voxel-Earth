@@ -18,6 +18,8 @@ class World {
     Noise noise;
 
     public:
+        World();
+
         void setup(Renderer& renderer);
         void update(float delta_time);
         Scene& get_scene();
