@@ -38,15 +38,19 @@ CLIENT_SRC = \
 	$(wildcard $(CLIENT_DIR)/*.cpp) \
 	$(wildcard $(CLIENT_DIR)/World-Scene/*.cpp)
 
+SHARED_SRC = \
+	$(wildcard Math/*.cpp)
+
 
 all: server.exe client.exe
 
 server.exe: server/server.c
-	$(CC) $(CFLAGS) server/server.c $(ENET_SRC) $(LIBS) -o server.exe
+	$(CC) $(CFLAGS) server/server.c $(SHARED_SRC) $(ENET_SRC) $(LIBS) -o server.exe
 
 client.exe: ${CLIENT_SRC}
 	${CXX} $(CFLAGS) \
 		${CLIENT_SRC} \
+		$(SHARED_SRC) \
 		-I. \
 		$(VULKAN_GRAPHICS_LIB_INCLUDE) \
 		$(ENET_SRC) \

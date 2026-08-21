@@ -2,18 +2,16 @@
 
 
 void World::setup(Renderer& renderer) {
+    noise = Noise(1234, 0.01f);
+    
     std::cout << "Loading resources...\n";
-
     monkey_mesh = std::make_unique<Mesh>(
         renderer.load_mesh("external/VGL/assets/monkey.obj")
     );
-
     gravel_texture = std::make_unique<Texture>(
         renderer.load_texture("external/VGL/assets/Textures/Gravel.ktx")
     );
-
     std::cout << "Loading shader...\n";
-
     shader = std::make_unique<Shader>(
         renderer.load_shader("external/VGL/assets/shader.slang")
     );

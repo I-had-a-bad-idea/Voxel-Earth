@@ -4,6 +4,8 @@
 #include <VGL/object.h>
 #include <VGL/renderer.h>
 
+#include "Math/noise.h"
+
 class World {
     Scene scene;
 
@@ -13,6 +15,8 @@ class World {
     std::unique_ptr<Material> gravel_material;
     std::unique_ptr<Object> monkey;
     
+    Noise noise;
+
     public:
         void setup(Renderer& renderer);
         void update(float delta_time);
