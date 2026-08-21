@@ -5,8 +5,8 @@ void World::setup(Renderer& renderer) {
     noise = Noise(1234, 0.01f);
     
     std::cout << "Loading resources...\n";
-    monkey_mesh = std::make_unique<Mesh>(
-        renderer.load_mesh("external/VGL/assets/monkey.obj")
+    cube_mesh = std::make_unique<Mesh>(
+        renderer.load_mesh("assets/cube.obj")
     );
     gravel_texture = std::make_unique<Texture>(
         renderer.load_texture("external/VGL/assets/Textures/Gravel.ktx")
@@ -23,8 +23,8 @@ void World::setup(Renderer& renderer) {
         shader.get()
     );
 
-    monkey = std::make_unique<Object>(
-        monkey_mesh.get(),
+    cube = std::make_unique<Object>(
+        cube_mesh.get(),
         gravel_material.get(),
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 0.0f, 0.0f)
@@ -32,15 +32,15 @@ void World::setup(Renderer& renderer) {
 
     std::cout << "Adding object(s) to scene...\n";
 
-    scene.add_object_to_scene(monkey.get());
+    scene.add_object_to_scene(cube.get());
 
     scene.cam_pos = glm::vec3(0.0f, 0.0f, 5.0f);
 }
 
 void World::update(float delta_time) {
-    if (monkey) {
-        monkey->rotation.y += delta_time;
-        monkey->rotation.x += delta_time * 0.5f;
+    if (cube) {
+        cube->rotation.y += delta_time;
+        cube->rotation.x += delta_time * 0.5f;
     }
 }
 
