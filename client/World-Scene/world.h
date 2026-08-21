@@ -41,8 +41,8 @@ class Chunk {
 };
 
 
-#define WORLD_SIZE_X 5
-#define WORLD_SIZE_Z 5
+#define WORLD_SIZE_X 2
+#define WORLD_SIZE_Z 2
 
 class World {
     Scene scene;

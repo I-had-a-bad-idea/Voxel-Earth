@@ -27,25 +27,27 @@ void World::setup(Renderer& renderer) {
 
 
     std::cout << "Creating chunks...\n";
-    for (int chunk_x = 0; chunk_x < 5; chunk_x++) {
-        for (int chunk_z = 0; chunk_z < 5; chunk_z++) {
+    for (int chunk_x = 0; chunk_x < WORLD_SIZE_X; chunk_x++) {
+        for (int chunk_z = 0; chunk_z < WORLD_SIZE_Z; chunk_z++) {
+            std::cout << "Chunk " << chunk_x * WORLD_SIZE_Z + (chunk_z+1) << " of " << WORLD_SIZE_X * WORLD_SIZE_Z << std::endl;
+
             chunks[chunk_x][chunk_z] = Chunk(noise, chunk_x, chunk_z);
         }
     }
 
 
-    std::cout << "Adding object(s) to scene...\n";
-    // for (auto& cube : cubes) {
-    //     scene.add_object_to_scene(cube.get());
-    // }
-    for (int chunk_x = 0; chunk_x < 5; chunk_x++) {
-        for (int chunk_z = 0; chunk_z < 5; chunk_z++) {
+    std::cout << "Adding chunks to scene...\n";
+    for (int chunk_x = 0; chunk_x < WORLD_SIZE_X; chunk_x++) {
+        for (int chunk_z = 0; chunk_z < WORLD_SIZE_Z; chunk_z++) {
+            std::cout << "Generating mesh data...\n";
             MeshData mesh_data = chunks[chunk_x][chunk_z].generate_mesh_data();
+            std::cout << "Creating mesh...\n";
             chunks[chunk_x][chunk_z].mesh = std::make_unique<Mesh>(renderer.load_mesh(mesh_data));
+            std::cout << "Creating object...\n";
             chunks[chunk_x][chunk_z].object = std::make_unique<Object>(
                 Object(chunks[chunk_x][chunk_z].mesh.get(), gravel_material.get(), glm::vec3(chunk_x, 0.0f, chunk_z), glm::vec3(0.0f, 0.0f, 0.0f))
             );
-            
+            std::cout << "Adding to scene...\n",
             scene.add_object_to_scene(chunks[chunk_x][chunk_z].object.get());
         }
     }
