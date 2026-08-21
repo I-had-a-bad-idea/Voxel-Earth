@@ -18,7 +18,7 @@ int main(void)
     // Create scene
     World world;
     world.setup(renderer);
-    Scene scene = world.get_scene();
+    Scene& scene = world.get_scene();
 
     glm::vec3 camera_velocity(0.0f);
     float move_speed = 5.0f;

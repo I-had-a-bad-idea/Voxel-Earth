@@ -35,6 +35,8 @@ void World::setup(Renderer& renderer) {
     std::cout << "Adding object(s) to scene...\n";
 
     scene.add_object_to_scene(monkey.get());
+
+    scene.cam_pos = glm::vec3(0.0f, 0.0f, 5.0f);
 }
 
 void World::update(float delta_time) {
@@ -44,6 +46,6 @@ void World::update(float delta_time) {
     }
 }
 
-const Scene& World::get_scene() const {
+Scene& World::get_scene() {
     return scene;
 }

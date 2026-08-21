@@ -16,7 +16,7 @@ class World {
     public:
         void setup(Renderer& renderer);
         void update(float delta_time);
-        const Scene& get_scene() const;
+        Scene& get_scene();
 };
 
 
