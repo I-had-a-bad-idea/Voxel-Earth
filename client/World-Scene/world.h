@@ -13,7 +13,7 @@ class World {
     std::unique_ptr<Texture> gravel_texture;
     std::unique_ptr<Shader> shader;
     std::unique_ptr<Material> gravel_material;
-    std::unique_ptr<Object> cube;
+    std::vector<std::unique_ptr<Object>> cubes;
     
     Noise noise;
 

@@ -21,7 +21,7 @@ int main(void)
     Scene& scene = world.get_scene();
 
     glm::vec3 camera_velocity(0.0f);
-    float move_speed = 5.0f;
+    float move_speed = 15.0f;
     float mouse_sensitivity = 0.0025f;
     float pitch = 0.0f;
 

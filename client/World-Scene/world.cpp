@@ -1,7 +1,7 @@
 #include "World.h"
 
 World::World() 
-    : noise(1234, 0.01f)
+    : noise(1234, 0.05f)
 {}
 
 void World::setup(Renderer& renderer) {
@@ -25,25 +25,33 @@ void World::setup(Renderer& renderer) {
         shader.get()
     );
 
-    cube = std::make_unique<Object>(
-        cube_mesh.get(),
-        gravel_material.get(),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f)
-    );
+    for (float x = 0; x < 100; x+=2) {
+        for (float z = 0; z < 100; z+=2) {
+            float height = noise.at(x, z);
+            // Create a cube object at the given position
+            std::unique_ptr<Object> cube = std::make_unique<Object>(
+                cube_mesh.get(),
+                gravel_material.get(),
+                glm::vec3(x, height, z),
+                glm::vec3(0.0f, 0.0f, 0.0f)
+            );
+            // Add to the cubes vector
+            cubes.push_back(std::move(cube));
+        }
+    }
+
 
     std::cout << "Adding object(s) to scene...\n";
+    for (auto& cube : cubes) {
+        scene.add_object_to_scene(cube.get());
+    }
 
-    scene.add_object_to_scene(cube.get());
-
+    std::cout << "Configuring scene..\n";
     scene.cam_pos = glm::vec3(0.0f, 0.0f, 5.0f);
+    scene.far_plane = 100.0f;
 }
 
 void World::update(float delta_time) {
-    if (cube) {
-        cube->rotation.y += delta_time;
-        cube->rotation.x += delta_time * 0.5f;
-    }
 }
 
 Scene& World::get_scene() {
