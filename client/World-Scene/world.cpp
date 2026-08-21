@@ -4,7 +4,7 @@
 void World::setup(Renderer& renderer) {
     std::cout << "Loading resources...\n";
 
-    cube_mesh = std::make_unique<Mesh>(
+    monkey_mesh = std::make_unique<Mesh>(
         renderer.load_mesh("external/VGL/assets/monkey.obj")
     );
 
@@ -25,8 +25,8 @@ void World::setup(Renderer& renderer) {
         shader.get()
     );
 
-    cube = std::make_unique<Object>(
-        cube_mesh.get(),
+    monkey = std::make_unique<Object>(
+        monkey_mesh.get(),
         gravel_material.get(),
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 0.0f, 0.0f)
@@ -34,9 +34,16 @@ void World::setup(Renderer& renderer) {
 
     std::cout << "Adding object(s) to scene...\n";
 
-    scene.add_object_to_scene(cube.get());
+    scene.add_object_to_scene(monkey.get());
 }
 
-const Scene& World::get_scene() {
+void World::update(float delta_time) {
+    if (monkey) {
+        monkey->rotation.y += delta_time;
+        monkey->rotation.x += delta_time * 0.5f;
+    }
+}
+
+const Scene& World::get_scene() const {
     return scene;
 }

@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include "World-Scene/world.h"
 
-
 int main(void)
 {
     // Define window size
@@ -19,18 +18,113 @@ int main(void)
     // Create scene
     World world;
     world.setup(renderer);
+    Scene scene = world.get_scene();
 
-    bool quit = false;
-    // Start renderer loop
-    std::cout << "Rendering..." << std::endl;
-    while(!quit) {
-        renderer.render_scene(world.get_scene());
+    glm::vec3 camera_velocity(0.0f);
+    float move_speed = 5.0f;
+    float mouse_sensitivity = 0.0025f;
+    float pitch = 0.0f;
+
+    std::cout << "Starting rendering..." << std::endl;
+    uint64_t last_time {SDL_GetTicks()}; // this is only FPS metrics related stuff
+    uint64_t fps_update_time {last_time};
+    uint32_t frame_count {0};
+    bool quit{ false };
+
+    while (!quit) {
+        uint64_t now = SDL_GetTicks();
+        float elapsed_time {(now - last_time) / 1000.0f};
+        last_time = now;
+
+        renderer.render_scene(world.get_scene()); // Render the scene
+        ++frame_count;
+        // More FPS stuff
+        if (now - fps_update_time >= 1000) {
+            float fps{ static_cast<float>(frame_count) / ((now - fps_update_time) / 1000.0f) };
+            std::cout << "FPS: " << fps << '\n';
+            frame_count = 0;
+            fps_update_time = now;
+        }
+        // Update scene (e.g. rotate the monkeys)
+        world.update(elapsed_time);
+        
+        // Input
+        const bool* keys = SDL_GetKeyboardState(nullptr);
+
+        camera_velocity = glm::vec3(0.0f);
+        glm::mat4 camera_transform = glm::translate(
+            glm::mat4(1.0f),
+            scene.cam_pos
+        ) * glm::mat4_cast(scene.cam_orientation);
+        glm::vec3 forward = glm::normalize(glm::vec3(
+            camera_transform * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)
+        ));
+        glm::vec3 right = glm::normalize(glm::vec3(
+            camera_transform * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f)
+        ));
+        
+        // Forward / backward
+        if (keys[SDL_SCANCODE_W])
+            camera_velocity.z += 1.0f;
+
+        if (keys[SDL_SCANCODE_S])
+            camera_velocity.z -= 1.0f;
+
+        // Left / right
+        if (keys[SDL_SCANCODE_A])
+            camera_velocity.x -= 1.0f;
+
+        if (keys[SDL_SCANCODE_D])
+            camera_velocity.x += 1.0f;
+
+        // Normalize so diagonal movement is not faster
+        if (glm::length(camera_velocity) > 0.0f)
+            camera_velocity = glm::normalize(camera_velocity);
+    
+
+        // Apply movement
+        scene.cam_pos += forward * camera_velocity.z * move_speed * elapsed_time;
+        scene.cam_pos += right * camera_velocity.x * move_speed * elapsed_time;
+
+        if (keys[SDL_SCANCODE_ESCAPE]) {
+            quit = true;
+        }
 
         for (SDL_Event event; SDL_PollEvent(&event);) {
             // Exit loop if the application is about to close
             if (event.type == SDL_EVENT_QUIT) {
                 quit = true;
                 break;
+            }
+
+            if (event.type == SDL_EVENT_MOUSE_MOTION) {
+                float mouse_x = (float)event.motion.xrel;
+                float mouse_y = -(float)event.motion.yrel;
+
+                float next_pitch = glm::clamp(
+                    pitch - mouse_y * mouse_sensitivity,
+                    -glm::radians(89.0f),
+                    glm::radians(89.0f)
+                );
+                float pitch_delta = next_pitch - pitch;
+                pitch = next_pitch;
+
+                scene.cam_orientation = glm::normalize(
+                    glm::angleAxis(-mouse_x * mouse_sensitivity, glm::vec3(0.0f, 1.0f, 0.0f))
+                    * scene.cam_orientation
+                );
+                glm::vec3 camera_right = scene.cam_orientation * glm::vec3(1.0f, 0.0f, 0.0f);
+                scene.cam_orientation = glm::normalize(
+                    glm::angleAxis(pitch_delta, camera_right)
+                    * scene.cam_orientation
+                );
+
+                scene.cam_rot = glm::eulerAngles(scene.cam_orientation);
+            }
+
+            // Zooming with the mouse wheel 
+            if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+                scene.cam_pos += forward * (float)event.wheel.y * move_speed * 0.1f;
             }
         }
     }

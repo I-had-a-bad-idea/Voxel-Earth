@@ -7,15 +7,16 @@
 class World {
     Scene scene;
 
-    std::unique_ptr<Mesh> cube_mesh;
+    std::unique_ptr<Mesh> monkey_mesh;
     std::unique_ptr<Texture> gravel_texture;
     std::unique_ptr<Shader> shader;
     std::unique_ptr<Material> gravel_material;
-    std::unique_ptr<Object> cube;
+    std::unique_ptr<Object> monkey;
     
     public:
         void setup(Renderer& renderer);
-        const Scene& get_scene();
+        void update(float delta_time);
+        const Scene& get_scene() const;
 };
 
 
