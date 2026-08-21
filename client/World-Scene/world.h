@@ -6,6 +6,39 @@
 
 #include "Math/noise.h"
 
+enum BlockType {
+    BlockType_Default = 0,
+    BlockType_Dirt,
+    BlockType_Grass,
+};
+
+class Block {
+    BlockType block_type;
+
+    public:
+        Block(BlockType block_type);
+        Block();
+};
+
+
+#define CHUNK_SIZE_X 32
+#define CHUNK_SIZE_Z 32
+#define CHUNK_SIZE_Y 64
+
+class Chunk {
+    Block blocks[CHUNK_SIZE_X][CHUNK_SIZE_Z][CHUNK_SIZE_Y];
+    int chunk_x;
+    int chunk_z;
+
+    public:
+        Chunk(Noise& noise, int chunk_x, int chunk_z);
+        Chunk();
+};
+
+
+#define WORLD_SIZE_X 5
+#define WORLD_SIZE_Z 5
+
 class World {
     Scene scene;
 
@@ -13,7 +46,8 @@ class World {
     std::unique_ptr<Texture> gravel_texture;
     std::unique_ptr<Shader> shader;
     std::unique_ptr<Material> gravel_material;
-    std::vector<std::unique_ptr<Object>> cubes;
+    
+    Chunk chunks[WORLD_SIZE_X][WORLD_SIZE_Z];
     
     Noise noise;
 

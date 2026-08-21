@@ -25,26 +25,19 @@ void World::setup(Renderer& renderer) {
         shader.get()
     );
 
-    for (float x = 0; x < 100; x+=2) {
-        for (float z = 0; z < 100; z+=2) {
-            float height = noise.at(x, z);
-            // Create a cube object at the given position
-            std::unique_ptr<Object> cube = std::make_unique<Object>(
-                cube_mesh.get(),
-                gravel_material.get(),
-                glm::vec3(x, height, z),
-                glm::vec3(0.0f, 0.0f, 0.0f)
-            );
-            // Add to the cubes vector
-            cubes.push_back(std::move(cube));
+
+    std::cout << "Creating chunks...\n";
+    for (int chunk_x = 0; chunk_x < 5; chunk_x++) {
+        for (int chunk_z = 0; chunk_z < 5; chunk_z++) {
+            chunks[chunk_x][chunk_z] = Chunk(noise, chunk_x, chunk_z);
         }
     }
 
 
     std::cout << "Adding object(s) to scene...\n";
-    for (auto& cube : cubes) {
-        scene.add_object_to_scene(cube.get());
-    }
+    // for (auto& cube : cubes) {
+    //     scene.add_object_to_scene(cube.get());
+    // }
 
     std::cout << "Configuring scene..\n";
     scene.cam_pos = glm::vec3(0.0f, 0.0f, 5.0f);
