@@ -38,6 +38,17 @@ void World::setup(Renderer& renderer) {
     // for (auto& cube : cubes) {
     //     scene.add_object_to_scene(cube.get());
     // }
+    for (int chunk_x = 0; chunk_x < 5; chunk_x++) {
+        for (int chunk_z = 0; chunk_z < 5; chunk_z++) {
+            MeshData mesh_data = chunks[chunk_x][chunk_z].generate_mesh_data();
+            chunks[chunk_x][chunk_z].mesh = std::make_unique<Mesh>(renderer.load_mesh(mesh_data));
+            chunks[chunk_x][chunk_z].object = std::make_unique<Object>(
+                Object(chunks[chunk_x][chunk_z].mesh.get(), gravel_material.get(), glm::vec3(chunk_x, 0.0f, chunk_z), glm::vec3(0.0f, 0.0f, 0.0f))
+            );
+            
+            scene.add_object_to_scene(chunks[chunk_x][chunk_z].object.get());
+        }
+    }
 
     std::cout << "Configuring scene..\n";
     scene.cam_pos = glm::vec3(0.0f, 0.0f, 5.0f);

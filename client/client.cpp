@@ -15,6 +15,7 @@ int main(void)
     // Create renderer
     Renderer renderer("Voxel Engine", width, height, true);
 
+    std::cout << "Creating world...\n";
     // Create scene
     World world;
     world.setup(renderer);

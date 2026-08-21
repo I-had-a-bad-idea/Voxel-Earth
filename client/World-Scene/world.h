@@ -13,9 +13,9 @@ enum BlockType {
 };
 
 class Block {
-    BlockType block_type;
-
     public:
+        BlockType block_type;
+
         Block(BlockType block_type);
         Block();
 };
@@ -33,6 +33,11 @@ class Chunk {
     public:
         Chunk(Noise& noise, int chunk_x, int chunk_z);
         Chunk();
+
+        std::unique_ptr<Object> object;
+        std::unique_ptr<Mesh> mesh;
+
+        MeshData generate_mesh_data();
 };
 
 
