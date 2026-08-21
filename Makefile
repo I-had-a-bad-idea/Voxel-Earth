@@ -9,7 +9,7 @@ LIBS = \
 	-lws2_32 \
 	-lwinmm \
 	-L$(VULKAN_SDK)/Lib \
-	-Lexternal/VulkanGraphicsLib \
+	-Lexternal/VGL \
 	-lvulkan-1 \
 	-l:VulkanGraphicsLib.a \
 	-lSDL3 \
@@ -26,13 +26,11 @@ ENET_SRC = \
 	$(ENET_DIR)/protocol.c \
 	$(ENET_DIR)/win32.c
 
-VULKAN_GRAPHICS_LIB = external/VulkanGraphicsLib
+VULKAN_GRAPHICS_LIB = external/VGL
 
 VULKAN_GRAPHICS_LIB_INCLUDE = \
 	-I$(VULKAN_GRAPHICS_LIB)/include \
-	-I$(VULKAN_GRAPHICS_LIB)/external/ \
-	-I$(VULKAN_GRAPHICS_LIB)/external/ktx/include \
-	-I$(VULKAN_GRAPHICS_LIB)/external/ktx/other_include
+	-I${VULKAN_GRAPHICS_LIB}/include/ktx/include \
 
 
 VULKAN_SDK = C:/VulkanSDK/1.4.357.0

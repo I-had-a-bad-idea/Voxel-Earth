@@ -2,7 +2,7 @@
 
 #include <enet/enet.h>
 #include <SDL3/SDL.h>
-#include <external/VulkanGraphicsLib/include/renderer.h>
+#include <VGL/renderer.h>
 #include <stdio.h>
 #include "World-Scene/world.h"
 
@@ -22,9 +22,9 @@ int main(void)
 
     bool quit = false;
     // Start renderer loop
+    std::cout << "Rendering..." << std::endl;
     while(!quit) {
         renderer.render_scene(world.get_scene());
-
 
         for (SDL_Event event; SDL_PollEvent(&event);) {
             // Exit loop if the application is about to close

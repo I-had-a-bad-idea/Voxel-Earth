@@ -1,8 +1,8 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <external/VulkanGraphicsLib/include/object.h>
-#include <external/VulkanGraphicsLib/include/renderer.h>
+#include <VGL/object.h>
+#include <VGL/renderer.h>
 
 class World {
     Scene scene;
