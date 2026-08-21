@@ -3,7 +3,7 @@ CC  = gcc
 
 ENET_DIR = external/enet
 
-CFLAGS = -I$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g
+CFLAGS = -isystem$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g
 
 LIBS = \
 	-lws2_32 \
@@ -11,7 +11,7 @@ LIBS = \
 	-L$(VULKAN_SDK)/Lib \
 	-Lexternal/VGL \
 	-lvulkan-1 \
-	-l:VulkanGraphicsLib.a \
+	-l:VGL.a \
 	-lSDL3 \
 	-lslang
 
@@ -29,11 +29,8 @@ ENET_SRC = \
 VULKAN_GRAPHICS_LIB = external/VGL
 
 VULKAN_GRAPHICS_LIB_INCLUDE = \
-	-I$(VULKAN_GRAPHICS_LIB)/include \
-	-I${VULKAN_GRAPHICS_LIB}/include/ktx/include \
-
-
-VULKAN_SDK = C:/VulkanSDK/1.4.357.0
+	-isystem$(VULKAN_GRAPHICS_LIB)/include \
+	-isystem${VULKAN_GRAPHICS_LIB}/include/ktx/include \
 
 CLIENT_DIR = client
 
@@ -52,7 +49,6 @@ client.exe: ${CLIENT_SRC}
 		${CLIENT_SRC} \
 		-I. \
 		$(VULKAN_GRAPHICS_LIB_INCLUDE) \
-		-I$(VULKAN_SDK)/Include \
 		$(ENET_SRC) \
 		${LIBS} \
 		-o client.exe

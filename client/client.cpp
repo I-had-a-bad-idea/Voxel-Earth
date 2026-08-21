@@ -14,7 +14,7 @@ int main(void)
     int height = 540;
 
     // Create renderer
-    Renderer renderer("Voxel Engine", width, height);
+    Renderer renderer("Voxel Engine", width, height, true);
 
     // Create scene
     World world;

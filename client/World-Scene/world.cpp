@@ -2,22 +2,39 @@
 
 
 void World::setup(Renderer& renderer) {
-    // Load meshes, textures and shaders
     std::cout << "Loading resources...\n";
-    Mesh cube_mesh = renderer.load_mesh("external/VGL/assets/monkey.obj"); // Currently only .obj is supported
-    Texture gravel_texture = renderer.load_texture("external/VGL/assets/Textures/Gravel.ktx"); // Currently only .ktx (as it is a format the GPU likes)
+
+    cube_mesh = std::make_unique<Mesh>(
+        renderer.load_mesh("external/VGL/assets/monkey.obj")
+    );
+
+    gravel_texture = std::make_unique<Texture>(
+        renderer.load_texture("external/VGL/assets/Textures/Gravel.ktx")
+    );
+
     std::cout << "Loading shader...\n";
-    Shader shader = renderer.load_shader("external/VGL/assets/shader.slang"); // The slang compiler is included in the library and shaders will be compiled when loaded
+
+    shader = std::make_unique<Shader>(
+        renderer.load_shader("external/VGL/assets/shader.slang")
+    );
+
     std::cout << "Creating material...\n";
-    // Create a material for gravel
-    Material gravel_material(&gravel_texture, &shader); // Create a material from a texture and a shader
 
-    // Create object(s) (mesh, material, position, rotation)
-    Object cube(&cube_mesh, &gravel_material, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f)); 
+    gravel_material = std::make_unique<Material>(
+        gravel_texture.get(),
+        shader.get()
+    );
 
-    // add objects to scene
+    cube = std::make_unique<Object>(
+        cube_mesh.get(),
+        gravel_material.get(),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f)
+    );
+
     std::cout << "Adding object(s) to scene...\n";
-    scene.add_object_to_scene(&cube);
+
+    scene.add_object_to_scene(cube.get());
 }
 
 const Scene& World::get_scene() {
