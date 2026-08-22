@@ -52,7 +52,7 @@ void World::setup(Renderer& renderer) {
     }
 
     std::cout << "Configuring scene..\n";
-    scene.cam_pos = glm::vec3(0.0f, 0.0f, 5.0f);
+    scene.cam_pos = glm::vec3(0.0f, -50.0f, 5.0f);
     scene.far_plane = 100.0f;
 }
 

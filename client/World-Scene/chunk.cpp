@@ -7,8 +7,8 @@ Chunk::Chunk()
     chunk_z = 0;
 }
 
-Chunk::Chunk(Noise& noise, int chunk_x, int chunk_z)
-    : chunk_x(chunk_x), chunk_z(chunk_z),
+Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
+    : chunk_x(chunk_x_), chunk_z(chunk_z_),
     blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y)
 {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
