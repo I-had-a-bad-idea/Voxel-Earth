@@ -6,6 +6,7 @@ Noise::Noise(int seed, float frequency, int fractal_octaves, float fractal_lacun
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
     noise.SetFrequency(frequency);
     
+    noise.SetFractalType(FastNoiseLite::FractalType_FBm);
     noise.SetFractalOctaves(fractal_octaves);
     noise.SetFractalLacunarity(fractal_lacunarity);
     noise.SetFractalGain(fractal_gain);

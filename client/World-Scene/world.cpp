@@ -41,6 +41,7 @@ void World::setup(Renderer& renderer) {
             MeshData mesh_data = chunks[chunk_x][chunk_z].generate_mesh_data();
             std::cout << "Creating mesh...\n";
             chunks[chunk_x][chunk_z].mesh = std::make_unique<Mesh>(renderer.load_mesh(mesh_data));
+            
             std::cout << "Creating object...\n";
             chunks[chunk_x][chunk_z].object = std::make_unique<Object>(
                 Object(chunks[chunk_x][chunk_z].mesh.get(), gravel_material.get(),
