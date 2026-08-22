@@ -19,14 +19,19 @@ Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
             const float n = noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
             const float normalized = (n + 1.0f) * 0.5f;
 
-            const float height = normalized * static_cast<float>(CHUNK_SIZE_Y / 4);
+            const int height = static_cast<int>(normalized * static_cast<float>(CHUNK_SIZE_Y / 4));
 
             for (int y = 0; y < CHUNK_SIZE_Y; y++) {
-                if (y < height) {
-                    set_block(x, y, z, Block(BlockType::Stone));
-                } else {
+                if (y > height) { // Above is air
                     set_block(x, y, z, Block(BlockType::Air));
+                } else if (y == height) {  // top is grass
+                    set_block(x, y, z, Block(BlockType::Grass)); 
+                } else if (y >= (height - 2)) { // 2 blocks of dirt
+                    set_block(x, y, z, Block(BlockType::Dirt));
+                } else { // then fill with stone
+                    set_block(x, y, z, Block(BlockType::Stone));
                 }
+
             }
         }
     }

@@ -41,7 +41,7 @@ class Block {
 
 #define CHUNK_SIZE_X 64
 #define CHUNK_SIZE_Z 64
-#define CHUNK_SIZE_Y 64
+#define CHUNK_SIZE_Y 128
 
 class Chunk {
     int chunk_x;
@@ -65,8 +65,8 @@ class Chunk {
 };
 
 
-#define WORLD_SIZE_X 2
-#define WORLD_SIZE_Z 2
+#define WORLD_SIZE_X 4
+#define WORLD_SIZE_Z 4
 
 class World {
     Scene scene;
