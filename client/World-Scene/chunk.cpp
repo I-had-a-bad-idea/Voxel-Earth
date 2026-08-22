@@ -19,7 +19,7 @@ Chunk::Chunk(Noise& noise, int chunk_x, int chunk_z)
                 if (y < height) {
                     blocks[x][z][y] = Block(BlockType_Grass);
                 } else {
-                    blocks[x][z][y] = Block(BlockType_Default);
+                    blocks[x][z][y] = Block(BlockType_Air);
                 }
             }
         }
@@ -38,7 +38,7 @@ MeshData Chunk::generate_mesh_data() {
             return false;
         }
 
-        return blocks[x][z][y].block_type != BlockType_Default;
+        return blocks[x][z][y].block_type != BlockType_Air;
     };
 
     // Add a quad to the mesh.

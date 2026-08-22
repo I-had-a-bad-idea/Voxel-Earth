@@ -7,7 +7,7 @@
 #include "Math/noise.h"
 
 enum BlockType {
-    BlockType_Default = 0,
+    BlockType_Air = 0,
     BlockType_Dirt,
     BlockType_Grass,
 };
