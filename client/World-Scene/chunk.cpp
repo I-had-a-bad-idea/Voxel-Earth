@@ -10,7 +10,10 @@ Chunk::Chunk(Noise& noise, int chunk_x, int chunk_z)
 {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
-            int height = noise.at((float)x, (float)z);
+            int world_x = chunk_x * CHUNK_SIZE_X + x;
+            int world_z = chunk_z * CHUNK_SIZE_Z + z;
+
+            float height = noise.at((float)world_x, (float)world_z) * 10.0f;
             
             for (int y = 0; y < CHUNK_SIZE_Y; y++) {
                 if (y < height) {

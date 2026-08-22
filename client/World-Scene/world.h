@@ -21,9 +21,9 @@ class Block {
 };
 
 
-#define CHUNK_SIZE_X 32
-#define CHUNK_SIZE_Z 32
-#define CHUNK_SIZE_Y 64
+#define CHUNK_SIZE_X 10
+#define CHUNK_SIZE_Z 10
+#define CHUNK_SIZE_Y 10
 
 class Chunk {
     Block blocks[CHUNK_SIZE_X][CHUNK_SIZE_Z][CHUNK_SIZE_Y];
@@ -41,8 +41,8 @@ class Chunk {
 };
 
 
-#define WORLD_SIZE_X 2
-#define WORLD_SIZE_Z 2
+#define WORLD_SIZE_X 1
+#define WORLD_SIZE_Z 1
 
 class World {
     Scene scene;
