@@ -13,8 +13,11 @@ Chunk::Chunk(Noise& noise, int chunk_x, int chunk_z)
             int world_x = chunk_x * CHUNK_SIZE_X + x;
             int world_z = chunk_z * CHUNK_SIZE_Z + z;
 
-            float height = noise.at((float)world_x, (float)world_z) * 10.0f;
-            
+            const float n = noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
+            const float normalized = (n + 1.0f) * 0.5f;
+
+            const float height = normalized * static_cast<float>(CHUNK_SIZE_Y - 1);
+
             for (int y = 0; y < CHUNK_SIZE_Y; y++) {
                 if (y < height) {
                     blocks[x][z][y] = Block(BlockType_Grass);

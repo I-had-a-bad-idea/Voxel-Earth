@@ -21,9 +21,9 @@ class Block {
 };
 
 
-#define CHUNK_SIZE_X 10
-#define CHUNK_SIZE_Z 10
-#define CHUNK_SIZE_Y 10
+#define CHUNK_SIZE_X 32
+#define CHUNK_SIZE_Z 32
+#define CHUNK_SIZE_Y 32
 
 class Chunk {
     Block blocks[CHUNK_SIZE_X][CHUNK_SIZE_Z][CHUNK_SIZE_Y];
@@ -41,8 +41,8 @@ class Chunk {
 };
 
 
-#define WORLD_SIZE_X 1
-#define WORLD_SIZE_Z 1
+#define WORLD_SIZE_X 2
+#define WORLD_SIZE_Z 2
 
 class World {
     Scene scene;
@@ -51,8 +51,6 @@ class World {
     std::unique_ptr<Texture> gravel_texture;
     std::unique_ptr<Shader> shader;
     std::unique_ptr<Material> gravel_material;
-
-    std::unique_ptr<Object> object;
     
     Chunk chunks[WORLD_SIZE_X][WORLD_SIZE_Z];
     
