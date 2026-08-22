@@ -51,6 +51,8 @@ class World {
     std::unique_ptr<Texture> gravel_texture;
     std::unique_ptr<Shader> shader;
     std::unique_ptr<Material> gravel_material;
+
+    std::unique_ptr<Object> object;
     
     Chunk chunks[WORLD_SIZE_X][WORLD_SIZE_Z];
     

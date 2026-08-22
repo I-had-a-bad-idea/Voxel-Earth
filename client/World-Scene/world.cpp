@@ -25,6 +25,8 @@ void World::setup(Renderer& renderer) {
         shader.get()
     );
 
+    object = std::make_unique<Object>(Object(cube_mesh.get(), gravel_material.get(), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f))); 
+
 
     std::cout << "Creating chunks...\n";
     for (int chunk_x = 0; chunk_x < WORLD_SIZE_X; chunk_x++) {
@@ -47,10 +49,11 @@ void World::setup(Renderer& renderer) {
             chunks[chunk_x][chunk_z].object = std::make_unique<Object>(
                 Object(chunks[chunk_x][chunk_z].mesh.get(), gravel_material.get(), glm::vec3(chunk_x, 0.0f, chunk_z), glm::vec3(0.0f, 0.0f, 0.0f))
             );
-            std::cout << "Adding to scene...\n",
+            std::cout << "Adding to scene...\n";
             scene.add_object_to_scene(chunks[chunk_x][chunk_z].object.get());
         }
     }
+    scene.add_object_to_scene(object.get());
 
     std::cout << "Configuring scene..\n";
     scene.cam_pos = glm::vec3(0.0f, 0.0f, 5.0f);
