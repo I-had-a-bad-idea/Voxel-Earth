@@ -1,7 +1,7 @@
 #include "World.h"
 
 World::World() 
-    : noise(1234, 0.01f)
+    : noise(1234, 0.01f, 4, 2.0f, 0.5f)
 {}
 
 void World::setup(Renderer& renderer) {

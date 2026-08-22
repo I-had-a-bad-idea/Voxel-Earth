@@ -17,6 +17,11 @@ Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
             int world_z = chunk_z * CHUNK_SIZE_Z + z;
 
             const float n = noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
+            if ((z == 0 || z == CHUNK_SIZE_Z - 1) && x==0) {
+                std::cout << "chunk(" << chunk_x << "," << chunk_z << ") "
+                        << "local z=" << z << " world_x=" << world_x
+                        << " world_z=" << world_z << " n=" << n << "\n";
+            }
             const float normalized = (n + 1.0f) * 0.5f;
 
             const int height = static_cast<int>(normalized * static_cast<float>(CHUNK_SIZE_Y / 4));

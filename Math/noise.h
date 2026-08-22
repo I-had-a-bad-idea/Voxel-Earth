@@ -5,7 +5,7 @@
 
 class Noise {
     public:
-        Noise(int seed, float frequency);
+        Noise(int seed, float frequency, int fractal_octaves, float fractal_lacunarity, float fractal_gain);
         float at(float x, float y);
         // TODO: add a lot more configuration possibilities
 
