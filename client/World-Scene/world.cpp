@@ -7,8 +7,8 @@ World::World()
 void World::setup(Renderer& renderer) {
     
     std::cout << "Loading resources...\n";
-    gravel_texture = std::make_unique<Texture>(
-        renderer.load_texture("external/VGL/assets/Textures/Gravel.ktx")
+    atlas_texture = std::make_unique<Texture>(
+        renderer.load_texture("assets/blocks.ktx")
     );
     std::cout << "Loading shader...\n";
     shader = std::make_unique<Shader>(
@@ -18,7 +18,7 @@ void World::setup(Renderer& renderer) {
     std::cout << "Creating material...\n";
 
     gravel_material = std::make_unique<Material>(
-        gravel_texture.get(),
+        atlas_texture.get(),
         shader.get()
     );
 

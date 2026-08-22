@@ -23,9 +23,9 @@ Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
 
             for (int y = 0; y < CHUNK_SIZE_Y; y++) {
                 if (y < height) {
-                    set_block(x, y, z, Block(BlockType_Dirt));
+                    set_block(x, y, z, Block(BlockType::Stone));
                 } else {
-                    set_block(x, y, z, Block(BlockType_Air));
+                    set_block(x, y, z, Block(BlockType::Air));
                 }
             }
         }
@@ -44,7 +44,7 @@ MeshData Chunk::generate_mesh_data() {
             return false;
         }
 
-        return get_block(x, y, z).block_type != BlockType_Air;
+        return get_block(x, y, z).block_type != BlockType::Air;
     };
 
     // Add a quad to the mesh.
@@ -53,7 +53,8 @@ MeshData Chunk::generate_mesh_data() {
                         const glm::vec3& v0,
                         const glm::vec3& v1,
                         const glm::vec3& v2,
-                        const glm::vec3& v3) {
+                        const glm::vec3& v3,
+                        AtlasTile tile) {
 
         uint32_t start_index =
             static_cast<uint32_t>(mesh_data.vertices.size());
@@ -61,25 +62,25 @@ MeshData Chunk::generate_mesh_data() {
         mesh_data.vertices.push_back({
             position + v0,
             normal,
-            glm::vec2(0.0f, 0.0f)
+            atlas_uv(tile, glm::vec2(0.0f, 0.0f))
         });
 
         mesh_data.vertices.push_back({
             position + v1,
             normal,
-            glm::vec2(1.0f, 0.0f)
+            atlas_uv(tile, glm::vec2(1.0f, 0.0f))
         });
 
         mesh_data.vertices.push_back({
             position + v2,
             normal,
-            glm::vec2(1.0f, 1.0f)
+            atlas_uv(tile, glm::vec2(1.0f, 1.0f))
         });
 
         mesh_data.vertices.push_back({
             position + v3,
             normal,
-            glm::vec2(0.0f, 1.0f)
+            atlas_uv(tile, glm::vec2(0.0f, 1.0f))
         });
 
         // Two triangles.
@@ -95,9 +96,12 @@ MeshData Chunk::generate_mesh_data() {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
             for (int y = 0; y < CHUNK_SIZE_Y; y++) {
+                const Block& block = get_block(x, y, z);
 
                 if (!is_solid(x, y, z))
                     continue;
+
+                BlockTexture texture = get_block_texture(block.block_type);
 
                 glm::vec3 position(
                     static_cast<float>(x),
@@ -114,7 +118,9 @@ MeshData Chunk::generate_mesh_data() {
                         glm::vec3(0, 0, 1),
                         glm::vec3(0, 0, 0),
                         glm::vec3(0, 1, 0),
-                        glm::vec3(0, 1, 1)
+                        glm::vec3(0, 1, 1),
+
+                        texture.side
                     );
                 }
 
@@ -127,7 +133,9 @@ MeshData Chunk::generate_mesh_data() {
                         glm::vec3(1, 0, 0),
                         glm::vec3(1, 0, 1),
                         glm::vec3(1, 1, 1),
-                        glm::vec3(1, 1, 0)
+                        glm::vec3(1, 1, 0),
+
+                        texture.side
                     );
                 }
 
@@ -140,7 +148,9 @@ MeshData Chunk::generate_mesh_data() {
                         glm::vec3(0, 0, 0),
                         glm::vec3(1, 0, 0),
                         glm::vec3(1, 0, 1),
-                        glm::vec3(0, 0, 1)
+                        glm::vec3(0, 0, 1),
+
+                        texture.bottom
                     );
                 }
 
@@ -153,7 +163,9 @@ MeshData Chunk::generate_mesh_data() {
                         glm::vec3(0, 1, 0),
                         glm::vec3(0, 1, 1),
                         glm::vec3(1, 1, 1),
-                        glm::vec3(1, 1, 0)
+                        glm::vec3(1, 1, 0),
+
+                        texture.top
                     );
                 }
 
@@ -166,7 +178,9 @@ MeshData Chunk::generate_mesh_data() {
                         glm::vec3(1, 0, 0),
                         glm::vec3(0, 0, 0),
                         glm::vec3(0, 1, 0),
-                        glm::vec3(1, 1, 0)
+                        glm::vec3(1, 1, 0),
+
+                        texture.side
                     );
                 }
 
@@ -179,7 +193,9 @@ MeshData Chunk::generate_mesh_data() {
                         glm::vec3(0, 0, 1),
                         glm::vec3(1, 0, 1),
                         glm::vec3(1, 1, 1),
-                        glm::vec3(0, 1, 1)
+                        glm::vec3(0, 1, 1),
+
+                        texture.side
                     );
                 }
             }

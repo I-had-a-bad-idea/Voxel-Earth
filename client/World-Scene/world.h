@@ -6,11 +6,29 @@
 
 #include "Math/noise.h"
 
-enum BlockType {
-    BlockType_Air = 0,
-    BlockType_Dirt,
-    BlockType_Grass,
+enum class BlockType {
+    Air,
+    Stone,
+    Dirt,
+    Grass,
 };
+
+struct AtlasTile { // (0, 0) is top left
+    uint32_t x;
+    uint32_t y;
+};
+
+struct BlockTexture {
+    AtlasTile top;
+    AtlasTile bottom;
+    AtlasTile side;
+};
+
+BlockTexture get_block_texture(BlockType type);
+constexpr float ATLAS_WIDTH = 16.0f;
+constexpr float ATLAS_HEIGHT = 20.0f;
+
+glm::vec2 atlas_uv(AtlasTile, glm::vec2 uv);
 
 class Block {
     public:
@@ -54,7 +72,7 @@ class World {
     Scene scene;
 
     std::unique_ptr<Mesh> cube_mesh;
-    std::unique_ptr<Texture> gravel_texture;
+    std::unique_ptr<Texture> atlas_texture;
     std::unique_ptr<Shader> shader;
     std::unique_ptr<Material> gravel_material;
     
