@@ -1,7 +1,7 @@
 #include "World.h"
 
 World::World() 
-    : noise(1234, 0.05f)
+    : noise(1234, 0.01f)
 {}
 
 void World::setup(Renderer& renderer) {
@@ -22,8 +22,11 @@ void World::setup(Renderer& renderer) {
         shader.get()
     );
 
+
+    chunks.resize(WORLD_SIZE_X);
     std::cout << "Creating chunks...\n";
     for (int chunk_x = 0; chunk_x < WORLD_SIZE_X; chunk_x++) {
+        chunks[chunk_x].resize(WORLD_SIZE_Z);
         for (int chunk_z = 0; chunk_z < WORLD_SIZE_Z; chunk_z++) {
             std::cout << "Chunk " << chunk_x * WORLD_SIZE_Z + (chunk_z+1) << " of " << WORLD_SIZE_X * WORLD_SIZE_Z << std::endl;
             chunks[chunk_x][chunk_z] = Chunk(noise, chunk_x, chunk_z);

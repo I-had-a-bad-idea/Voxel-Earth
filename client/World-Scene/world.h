@@ -21,14 +21,14 @@ class Block {
 };
 
 
-#define CHUNK_SIZE_X 32
-#define CHUNK_SIZE_Z 32
-#define CHUNK_SIZE_Y 32
+#define CHUNK_SIZE_X 64
+#define CHUNK_SIZE_Z 64
+#define CHUNK_SIZE_Y 64
 
 class Chunk {
-    Block blocks[CHUNK_SIZE_X][CHUNK_SIZE_Z][CHUNK_SIZE_Y];
     int chunk_x;
     int chunk_z;
+    std::vector<Block> blocks;
 
     public:
         Chunk(Noise& noise, int chunk_x, int chunk_z);
@@ -38,6 +38,12 @@ class Chunk {
         std::unique_ptr<Mesh> mesh;
 
         MeshData generate_mesh_data();
+        inline Block get_block(int x, int y, int z) {
+            return blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)];
+        }
+        inline void set_block(int x, int y, int z, Block block) {
+            blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)] = block;
+        }
 };
 
 
@@ -52,7 +58,7 @@ class World {
     std::unique_ptr<Shader> shader;
     std::unique_ptr<Material> gravel_material;
     
-    Chunk chunks[WORLD_SIZE_X][WORLD_SIZE_Z];
+    std::vector<std::vector<Chunk>> chunks;
     
     Noise noise;
 

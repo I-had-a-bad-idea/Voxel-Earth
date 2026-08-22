@@ -1,12 +1,15 @@
 #include "world.h"
 
-Chunk::Chunk() {
+Chunk::Chunk() 
+    : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y)
+{
     chunk_x = 0;
     chunk_z = 0;
 }
 
 Chunk::Chunk(Noise& noise, int chunk_x, int chunk_z)
-    : chunk_x(chunk_x), chunk_z(chunk_z)
+    : chunk_x(chunk_x), chunk_z(chunk_z),
+    blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y)
 {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
@@ -16,13 +19,13 @@ Chunk::Chunk(Noise& noise, int chunk_x, int chunk_z)
             const float n = noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
             const float normalized = (n + 1.0f) * 0.5f;
 
-            const float height = normalized * static_cast<float>(CHUNK_SIZE_Y - 1);
+            const float height = normalized * static_cast<float>(CHUNK_SIZE_Y / 4);
 
             for (int y = 0; y < CHUNK_SIZE_Y; y++) {
                 if (y < height) {
-                    blocks[x][z][y] = Block(BlockType_Grass);
+                    set_block(x, y, z, Block(BlockType_Dirt));
                 } else {
-                    blocks[x][z][y] = Block(BlockType_Air);
+                    set_block(x, y, z, Block(BlockType_Air));
                 }
             }
         }
@@ -41,7 +44,7 @@ MeshData Chunk::generate_mesh_data() {
             return false;
         }
 
-        return blocks[x][z][y].block_type != BlockType_Air;
+        return get_block(x, y, z).block_type != BlockType_Air;
     };
 
     // Add a quad to the mesh.
