@@ -1,13 +1,5 @@
 #include "world.h"
 
-Block::Block() {
-    block_type = BlockType::Air;
-}
-
-Block::Block(BlockType block_type_) {
-    block_type = block_type_;
-}
-
 glm::vec2 atlas_uv(AtlasTile tile, glm::vec2 uv) {
     glm::vec2 tile_size (
         1.0f / ATLAS_WIDTH,

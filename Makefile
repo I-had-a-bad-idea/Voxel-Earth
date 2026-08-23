@@ -46,7 +46,7 @@ SHARED_SRC = \
 all: server.exe client.exe
 
 server.exe: server/server.c
-	$(CC) $(CFLAGS) server/server.c $(SHARED_SRC) $(ENET_SRC) $(LIBS) -o server.exe
+	$(CC) $(CFLAGS) server/server.c $(SHARED_SRC) $(ENET_SRC) $(LIBS) -O2 -o server.exe
 
 client.exe: ${CLIENT_SRC}
 	${CXX} $(CXXFLAGS) \

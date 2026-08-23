@@ -4,8 +4,8 @@
 #include <unordered_map>
 #include <utility>
 
-#include <VGL/object.h>
 #include <VGL/renderer.h>
+#include <VGL/object.h>
 
 #include "Math/noise.h"
 
@@ -33,17 +33,9 @@ constexpr float ATLAS_HEIGHT = 20.0f;
 
 glm::vec2 atlas_uv(AtlasTile, glm::vec2 uv);
 
-class Block {
-    public:
-        BlockType block_type;
 
-        Block(BlockType block_type);
-        Block();
-};
-
-
-#define CHUNK_SIZE_X 64
-#define CHUNK_SIZE_Z 64
+#define CHUNK_SIZE_X 32
+#define CHUNK_SIZE_Z 32
 #define CHUNK_SIZE_Y 128
 
 struct ChunkPos {
@@ -64,7 +56,7 @@ struct ChunkPosHash {
 class Chunk {
     int chunk_x;
     int chunk_z;
-    std::vector<Block> blocks;
+    std::vector<BlockType> blocks;
 
     public:
         Chunk(Noise& noise, int chunk_x, int chunk_z);
@@ -74,10 +66,10 @@ class Chunk {
         std::unique_ptr<Mesh> mesh;
 
         MeshData generate_mesh_data();
-        inline Block get_block(int x, int y, int z) {
+        inline BlockType get_block(int x, int y, int z) {
             return blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)];
         }
-        inline void set_block(int x, int y, int z, Block block) {
+        inline void set_block(int x, int y, int z, BlockType block) {
             blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)] = block;
         }
 };

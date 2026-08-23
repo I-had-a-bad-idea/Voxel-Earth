@@ -12,27 +12,24 @@ Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
     blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y)
 {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
+        int world_x = chunk_x * CHUNK_SIZE_X + x;
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
-            int world_x = chunk_x * CHUNK_SIZE_X + x;
             int world_z = chunk_z * CHUNK_SIZE_Z + z;
 
             const float n = noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
             const float normalized = (n + 1.0f) * 0.5f;
 
             const int height = static_cast<int>(normalized * static_cast<float>(CHUNK_SIZE_Y / 4));
-
-            for (int y = 0; y < CHUNK_SIZE_Y; y++) {
-                if (y > height) { // Above is air
-                    set_block(x, y, z, Block(BlockType::Air));
-                } else if (y == height) {  // top is grass
-                    set_block(x, y, z, Block(BlockType::Grass)); 
-                } else if (y >= (height - 2)) { // 2 blocks of dirt
-                    set_block(x, y, z, Block(BlockType::Dirt));
-                } else { // then fill with stone
-                    set_block(x, y, z, Block(BlockType::Stone));
-                }
-
+            
+            for (int y = 0; y < height - 2; y++) {
+                set_block(x, y, z, BlockType::Stone); // stone 
             }
+            for (int y = height - 2; y < height; y++) {
+                set_block(x, y, z, BlockType::Dirt); // two layers dirt
+            }
+            set_block(x, height, z, BlockType::Grass); // top layer grass
+            
+            // Air is default
         }
     }
 }
@@ -49,7 +46,7 @@ MeshData Chunk::generate_mesh_data() {
             return false;
         }
 
-        return get_block(x, y, z).block_type != BlockType::Air;
+        return get_block(x, y, z) != BlockType::Air;
     };
 
     // Add a quad to the mesh.
@@ -101,12 +98,12 @@ MeshData Chunk::generate_mesh_data() {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
             for (int y = 0; y < CHUNK_SIZE_Y; y++) {
-                const Block& block = get_block(x, y, z);
+                const BlockType& block = get_block(x, y, z);
 
                 if (!is_solid(x, y, z))
                     continue;
 
-                BlockTexture texture = get_block_texture(block.block_type);
+                BlockTexture texture = get_block_texture(block);
 
                 glm::vec3 position(
                     static_cast<float>(x),
