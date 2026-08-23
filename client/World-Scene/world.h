@@ -1,6 +1,9 @@
 #ifndef WORLD_H
 #define WORLD_H
 
+#include <unordered_map>
+#include <utility>
+
 #include <VGL/object.h>
 #include <VGL/renderer.h>
 
@@ -43,6 +46,21 @@ class Block {
 #define CHUNK_SIZE_Z 64
 #define CHUNK_SIZE_Y 128
 
+struct ChunkPos {
+    int x;
+    int z;
+
+    bool operator==(const ChunkPos& other) const {
+        return x == other.x && z == other.z;
+    }
+};
+
+struct ChunkPosHash {
+    std::size_t operator()(const ChunkPos& pos) const {
+        return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.z) << 1);
+    }
+};
+
 class Chunk {
     int chunk_x;
     int chunk_z;
@@ -68,15 +86,17 @@ class Chunk {
 #define WORLD_SIZE_X 4
 #define WORLD_SIZE_Z 4
 
+#define RENDER_DISTANCE 2
+
 class World {
     Scene scene;
 
     std::unique_ptr<Mesh> cube_mesh;
     std::unique_ptr<Texture> atlas_texture;
     std::unique_ptr<Shader> shader;
-    std::unique_ptr<Material> gravel_material;
+    std::unique_ptr<Material> atlas_material;
     
-    std::vector<std::vector<Chunk>> chunks;
+    std::unordered_map<ChunkPos, Chunk, ChunkPosHash> chunks;
     
     Noise noise;
 
@@ -84,7 +104,8 @@ class World {
         World();
 
         void setup(Renderer& renderer);
-        void update(float delta_time);
+        void update(Renderer& renderer, float delta_time);
+        void update_chunks(Renderer& renderer);
         Scene& get_scene();
 };
 

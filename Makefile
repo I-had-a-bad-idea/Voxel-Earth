@@ -4,6 +4,7 @@ CC  = gcc
 ENET_DIR = external/enet
 
 CFLAGS = -isystem$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g
+CXXFLAGS = ${CFLAGS} -std=c++20
 
 LIBS = \
 	-lws2_32 \
@@ -48,7 +49,7 @@ server.exe: server/server.c
 	$(CC) $(CFLAGS) server/server.c $(SHARED_SRC) $(ENET_SRC) $(LIBS) -o server.exe
 
 client.exe: ${CLIENT_SRC}
-	${CXX} $(CFLAGS) \
+	${CXX} $(CXXFLAGS) \
 		${CLIENT_SRC} \
 		$(SHARED_SRC) \
 		-I. \

@@ -47,7 +47,7 @@ int main(void)
             fps_update_time = now;
         }
         // Update scene (e.g. rotate the monkeys)
-        world.update(elapsed_time);
+        world.update(renderer, elapsed_time);
         
         // Input
         const bool* keys = SDL_GetKeyboardState(nullptr);
