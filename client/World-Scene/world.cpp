@@ -40,6 +40,24 @@ void World::update_chunks(Renderer& renderer) {
             scene.add_object_to_scene(chunk.object.get());
         }
     }
+
+
+    // Remove chunks that are too far away
+    std::vector<ChunkPos> chunks_to_remove;
+    for (const auto& [pos, chunk] : chunks) {
+        int dx = pos.x - camera_chunk_x;
+        int dz = pos.z - camera_chunk_z;
+        if (std::abs(dx) > RENDER_DISTANCE || std::abs(dz) > RENDER_DISTANCE) {
+            chunks_to_remove.push_back(pos);
+        }
+    }
+    for (const ChunkPos& pos : chunks_to_remove) {
+        const Chunk& chunk = chunks.at(pos);
+        scene.remove_object_from_scene(chunk.object.get());
+        renderer.destroy_mesh(*chunk.mesh);
+        std::cout << "Removing chunk " << pos.x << ", " << pos.z << "\n";
+        chunks.erase(pos);
+    }
 }
 
 void World::setup(Renderer& renderer) {
