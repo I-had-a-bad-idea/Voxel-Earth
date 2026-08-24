@@ -52,10 +52,10 @@ void World::update_chunks(Renderer& renderer) {
         }
     }
     for (const ChunkPos& pos : chunks_to_remove) {
+        std::cout << "Removing chunk " << pos.x << ", " << pos.z << "\n";
         const Chunk& chunk = chunks.at(pos);
         scene.remove_object_from_scene(chunk.object.get());
         renderer.destroy_mesh(*chunk.mesh);
-        std::cout << "Removing chunk " << pos.x << ", " << pos.z << "\n";
         chunks.erase(pos);
     }
 }
