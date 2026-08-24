@@ -78,6 +78,7 @@ class Chunk {
 #define RENDER_DISTANCE 5
 
 class World {
+    Renderer& renderer;
     Scene scene;
 
     std::unique_ptr<Mesh> cube_mesh;
@@ -90,12 +91,15 @@ class World {
     Noise noise;
 
     public:
-        World();
+        World(Renderer& renderer_);
 
-        void setup(Renderer& renderer);
-        void update(Renderer& renderer, float delta_time);
-        void update_chunks(Renderer& renderer);
+        void setup();
+        void update(float delta_time);
+        void update_chunks();
         Scene& get_scene();
+
+        BlockType get_block(int x, int y, int z);
+        void set_block(int x, int y, int z, BlockType);
 };
 
 

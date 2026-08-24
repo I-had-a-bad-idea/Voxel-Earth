@@ -1,10 +1,10 @@
 #include "World.h"
 
-World::World() 
-    : noise(1234, 0.01f, 4, 2.0f, 0.5f)
+World::World(Renderer& renderer_) 
+    : renderer(renderer_), noise(1234, 0.01f, 4, 2.0f, 0.5f)
 {}
 
-void World::update_chunks(Renderer& renderer) {
+void World::update_chunks() {
     int camera_chunk_x = static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
 
@@ -60,7 +60,7 @@ void World::update_chunks(Renderer& renderer) {
     }
 }
 
-void World::setup(Renderer& renderer) {
+void World::setup() {
     
     std::cout << "Loading resources...\n";
     atlas_texture = std::make_unique<Texture>(
@@ -82,13 +82,39 @@ void World::setup(Renderer& renderer) {
     scene.cam_pos = glm::vec3(0.0f, -50.0f, 5.0f);
     scene.far_plane = 1000.0f;
 
-    update_chunks(renderer);
+    update_chunks();
 }
 
-void World::update(Renderer& renderer, float delta_time) {
-    update_chunks(renderer);
+void World::update(float delta_time) {
+    update_chunks();
 }
 
 Scene& World::get_scene() {
     return scene;
+}
+
+BlockType World::get_block(int x, int y, int z) {
+    const int chunk_x = std::floor(x / CHUNK_SIZE_X);
+    const int chunk_z = std::floor(z / CHUNK_SIZE_Z);
+
+    const int block_x = x - chunk_x;
+    const int block_z = z - chunk_z;
+
+    const ChunkPos pos {chunk_x, chunk_z};
+
+    Chunk& chunk = chunks.at(pos);
+    return chunk.get_block(block_x, y, block_z);
+}
+
+void World::set_block(int x, int y, int z, BlockType block) {
+    const int chunk_x = std::floor(x / CHUNK_SIZE_X);
+    const int chunk_z = std::floor(z / CHUNK_SIZE_Z);
+
+    const int block_x = x - chunk_x;
+    const int block_z = z - chunk_z;
+
+    const ChunkPos pos {chunk_x, chunk_z};
+
+    Chunk& chunk = chunks.at(pos);
+    chunk.set_block(block_x, y, block_z, block);
 }

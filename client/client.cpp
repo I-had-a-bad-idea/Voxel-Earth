@@ -17,8 +17,8 @@ int main(void)
 
     std::cout << "Creating world...\n";
     // Create scene
-    World world;
-    world.setup(renderer);
+    World world(renderer);
+    world.setup();
     Scene& scene = world.get_scene();
 
     glm::vec3 camera_velocity(0.0f);
@@ -46,8 +46,8 @@ int main(void)
             frame_count = 0;
             fps_update_time = now;
         }
-        // Update scene (e.g. rotate the monkeys)
-        world.update(renderer, elapsed_time);
+        // Update world
+        world.update(elapsed_time);
         
         // Input
         const bool* keys = SDL_GetKeyboardState(nullptr);
