@@ -75,7 +75,7 @@ class Chunk {
         }
 };
 
-#define RENDER_DISTANCE 1
+#define RENDER_DISTANCE 5
 
 class World {
     Scene scene;

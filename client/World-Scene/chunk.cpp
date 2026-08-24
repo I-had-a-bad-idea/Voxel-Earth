@@ -1,7 +1,7 @@
 #include "world.h"
 
 Chunk::Chunk() 
-    : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y)
+    : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air)
 {
     chunk_x = 0;
     chunk_z = 0;
@@ -9,7 +9,7 @@ Chunk::Chunk()
 
 Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
     : chunk_x(chunk_x_), chunk_z(chunk_z_),
-    blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y)
+    blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air)
 {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         int world_x = chunk_x * CHUNK_SIZE_X + x;
@@ -25,10 +25,10 @@ Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
                 CHUNK_SIZE_Y - 1
             );
             
-            for (int y = 0; y < height - 2; y++) {
+            for (int y = 0; y < std::max(0, height - 2); y++) {
                 set_block(x, y, z, BlockType::Stone); // stone 
             }
-            for (int y = height - 2; y < height; y++) {
+            for (int y = std::max(0, height - 2); y < height; y++) {
                 set_block(x, y, z, BlockType::Dirt); // two layers dirt
             }
             set_block(x, height, z, BlockType::Grass); // top layer grass

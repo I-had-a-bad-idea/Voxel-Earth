@@ -80,7 +80,7 @@ void World::setup(Renderer& renderer) {
 
     std::cout << "Configuring scene..\n";
     scene.cam_pos = glm::vec3(0.0f, -50.0f, 5.0f);
-    scene.far_plane = 200.0f;
+    scene.far_plane = 1000.0f;
 
     update_chunks(renderer);
 }
