@@ -68,7 +68,7 @@ void World::setup(Renderer& renderer) {
     );
     std::cout << "Loading shader...\n";
     shader = std::make_unique<Shader>(
-        renderer.load_shader("external/VGL/assets/shader.slang")
+        renderer.load_shader("assets/shader.slang")
     );
 
     std::cout << "Creating material...\n";
