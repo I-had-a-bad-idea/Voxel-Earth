@@ -19,7 +19,11 @@ Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
             const float n = noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
             const float normalized = (n + 1.0f) * 0.5f;
 
-            const int height = static_cast<int>(normalized * static_cast<float>(CHUNK_SIZE_Y / 4));
+            const int height = std::clamp(
+                static_cast<int>(normalized * (CHUNK_SIZE_Y / 4.0f)),
+                0,
+                CHUNK_SIZE_Y - 1
+            );
             
             for (int y = 0; y < height - 2; y++) {
                 set_block(x, y, z, BlockType::Stone); // stone 

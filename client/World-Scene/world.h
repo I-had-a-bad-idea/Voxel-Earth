@@ -3,6 +3,7 @@
 
 #include <unordered_map>
 #include <utility>
+#include <algorithm>
 
 #include <VGL/renderer.h>
 #include <VGL/object.h>
