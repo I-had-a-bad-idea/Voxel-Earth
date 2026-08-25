@@ -1,4 +1,4 @@
-#include "world.h"
+#include "chunk.h"
 
 Chunk::Chunk() 
     : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air)
@@ -43,7 +43,7 @@ Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise,
             
 
             Biome biome;
-            if (height > CHUNK_SIZE_Y * 0.55f) {
+            if (height > CHUNK_SIZE_Y * 0.7f) {
                 biome = Biome::Mountains;
             }
             else if (temperature < 0.3f) {
@@ -88,7 +88,7 @@ Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise,
             // fill world with stone and dirt
             for (int y = 0; y < height; y++) {
                 BlockType type = BlockType::Stone;
-                if (y >= height - 3 && !(biome == Biome::Mountains)) { // mountains are just stone
+                if ((y >= height - 3) && !(biome == Biome::Mountains)) { // mountains are just stone
                     type = BlockType::Dirt;
                 }
                 set_block(x, y, z, type);

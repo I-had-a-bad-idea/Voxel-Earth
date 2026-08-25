@@ -1,4 +1,4 @@
-#include "world.h"
+#include "block.h"
 
 glm::vec2 atlas_uv(AtlasTile tile, glm::vec2 uv) {
     glm::vec2 tile_size (
