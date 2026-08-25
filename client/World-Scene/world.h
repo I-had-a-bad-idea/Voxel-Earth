@@ -2,6 +2,11 @@
 #define WORLD_H
 
 #include <unordered_map>
+#include <unordered_set>
+#include <condition_variable>
+#include <mutex>
+#include <queue>
+#include <thread>
 #include <utility>
 #include <algorithm>
 
@@ -15,6 +20,12 @@
 #define RENDER_DISTANCE 5
 
 class World {
+    struct GeneratedChunk {
+        ChunkPos pos;
+        std::unique_ptr<Chunk> chunk;
+        MeshData mesh_data;
+    };
+
     Renderer& renderer;
     Scene scene;
 
@@ -30,8 +41,21 @@ class World {
     Noise temperature_noise;
     Noise moisture_noise;
 
+    std::mutex generation_mutex;
+    std::condition_variable generation_condition;
+    std::queue<ChunkPos> generation_queue;
+    std::queue<GeneratedChunk> completed_chunks;
+    std::unordered_set<ChunkPos, ChunkPosHash> requested_chunks;
+    std::thread generation_thread;
+    bool stop_generation {false};
+
+    void generate_chunks();
+    void queue_chunk_generation(ChunkPos pos);
+    void process_completed_chunks();
+
     public:
         World(Renderer& renderer_);
+        ~World();
 
         void setup();
         void update(float delta_time);
