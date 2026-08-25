@@ -1,8 +1,116 @@
 #include "World.h"
 
-World::World(Renderer& renderer_) 
-    : renderer(renderer_), noise(1234, 0.01f, 4, 2.0f, 0.5f)
-{}
+World::World(Renderer& renderer_)
+    : renderer(renderer_),
+      height_noise(1234, 0.003f, 5, 2.0f, 0.5f),
+      detail_noise(5678, 0.015f, 3, 2.0f, 0.5f),
+      temperature_noise(9012, 0.0015f, 3, 2.0f, 0.5f),
+      moisture_noise(3456, 0.0015f, 3, 2.0f, 0.5f)
+{
+    generation_thread = std::thread(&World::generate_chunks, this);
+}
+
+World::~World() {
+    {
+        std::lock_guard lock(generation_mutex);
+        stop_generation = true;
+    }
+    generation_condition.notify_one();
+    generation_thread.join();
+}
+
+void World::generate_chunks() {
+    while (true) {
+        ChunkPos pos;
+        {
+            std::unique_lock lock(generation_mutex);
+            generation_condition.wait(lock, [this] { // wait for work or end
+                return stop_generation || !generation_queue.empty();
+            });
+
+            if (stop_generation && generation_queue.empty()) {
+                return;
+            }
+
+            // get work
+            pos = generation_queue.front();
+            generation_queue.pop();
+        }
+
+        // create chunk
+        auto chunk = std::make_unique<Chunk>(
+            height_noise,
+            detail_noise,
+            temperature_noise,
+            moisture_noise,
+            pos.x,
+            pos.z
+        );
+        MeshData mesh_data = chunk->generate_mesh_data(); // create mesh data
+
+        {
+            std::lock_guard lock(generation_mutex);
+            completed_chunks.push({pos, std::move(chunk), std::move(mesh_data)}); // submit as completed
+        }
+    }
+}
+
+void World::queue_chunk_generation(ChunkPos pos) {
+    if (chunks.contains(pos) || requested_chunks.contains(pos)) {
+        return;
+    }
+
+    // add work
+    requested_chunks.insert(pos);
+    {
+        std::lock_guard lock(generation_mutex);
+        generation_queue.push(pos);
+    }
+    generation_condition.notify_one(); // wake up thread
+}
+
+void World::process_completed_chunks() { // on main thread
+    GeneratedChunk generated;
+    std::size_t uploaded_chunks = 0;
+
+    // upload all generated chunks
+    while (uploaded_chunks < 1) {
+        {
+            std::lock_guard lock(generation_mutex);
+            if (completed_chunks.empty()) {
+                return;
+            }
+
+            // get chunk
+            generated = std::move(completed_chunks.front());
+            completed_chunks.pop();
+        }
+
+        requested_chunks.erase(generated.pos);
+        if (chunks.contains(generated.pos)) {
+            continue;
+        }
+
+
+        // add to chunk list
+        auto [it, inserted] = chunks.emplace(generated.pos, std::move(*generated.chunk));
+        if (!inserted) {
+            continue;
+        }
+
+        // create mesh and object
+        Chunk& chunk = it->second;
+        chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(generated.mesh_data)));
+        chunk.object = std::make_unique<Object>(
+            chunk.mesh.get(),
+            atlas_material.get(),
+            glm::vec3(generated.pos.x * CHUNK_SIZE_X, 0.0f, generated.pos.z * CHUNK_SIZE_Z),
+            glm::vec3(0.0f, 0.0f, 0.0f)
+        );
+        scene.add_object_to_scene(chunk.object.get()); // add to world
+        ++uploaded_chunks;
+    }
+}
 
 void World::update_chunks() {
     int camera_chunk_x = static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X));
@@ -15,31 +123,11 @@ void World::update_chunks() {
 
             ChunkPos pos {chunk_x, chunk_z};
 
-            if (chunks.contains(pos)) {
-                continue; // Already generated
-            }
-
-            std::cout
-                << "Generating chunk "
-                << chunk_x << ", " << chunk_z << "\n";
-
-            auto [it, inserted]  = chunks.emplace(
-                std::piecewise_construct,
-                std::forward_as_tuple(pos),
-                std::forward_as_tuple(noise, chunk_x, chunk_z)
-            );
-
-            Chunk& chunk = it->second;
-
-            MeshData mesh_data = chunk.generate_mesh_data();
-            chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(mesh_data));
-
-            chunk.object = std::make_unique<Object>(chunk.mesh.get(), atlas_material.get(),
-                glm::vec3(chunk_x * CHUNK_SIZE_X, 0.0f, chunk_z * CHUNK_SIZE_Z), glm::vec3(0.0f, 0.0f, 0.0f));
-            
-            scene.add_object_to_scene(chunk.object.get());
+            queue_chunk_generation(pos);
         }
     }
+
+    process_completed_chunks();
 
 
     // Remove chunks that are too far away
@@ -52,7 +140,6 @@ void World::update_chunks() {
         }
     }
     for (const ChunkPos& pos : chunks_to_remove) {
-        std::cout << "Removing chunk " << pos.x << ", " << pos.z << "\n";
         const Chunk& chunk = chunks.at(pos);
         scene.remove_object_from_scene(chunk.object.get());
         renderer.destroy_mesh(*chunk.mesh);
