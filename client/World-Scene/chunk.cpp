@@ -59,16 +59,50 @@ Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise,
                 biome = Biome::Plains;
             }
 
+            // oceans and beaches
+            if (height < SEA_LEVEL) {
+                for (int y = 0; y <= height; y++) {
+                    if (y < height - 3)
+                        set_block(x, y, z, BlockType::Stone); // fill with stone
+                    else
+                        set_block(x, y, z, BlockType::Sand); // sand
+                }
+                for (int y = height + 1; y <= SEA_LEVEL; y++) {
+                    set_block(x, y, z, BlockType::Water); // fill lowlands with water
+                }
+                continue;
+            }
+            const bool beach = height <= SEA_LEVEL + 2;
 
-            for (int y = 0; y < std::max(0, height - 2); y++) {
-                set_block(x, y, z, BlockType::Stone); // stone 
+            // calculate surface
+            BlockType surface = BlockType::Grass;
+            if (beach) {
+                surface = BlockType::Sand;
+            } else if (biome == Biome::Desert) {
+                surface = BlockType::Sand;
+            } else if (biome == Biome::Tundra) {
+                surface = BlockType::Snow;
             }
-            for (int y = std::max(0, height - 2); y < height; y++) {
-                set_block(x, y, z, BlockType::Dirt); // two layers dirt
-            }
-            set_block(x, height, z, BlockType::Grass); // top layer grass
             
-            // Air is default
+
+            // fill world with stone and dirt
+            for (int y = 0; y < height; y++) {
+                BlockType type = BlockType::Stone;
+                if (y >= height - 3 && !(biome == Biome::Mountains)) { // mountains are just stone
+                    type = BlockType::Dirt;
+                }
+                set_block(x, y, z, type);
+            }
+            // set surface
+            set_block(x, height, z, surface);
+            
+            // Fill deserts with sand
+            if (biome == Biome::Desert) {
+                for (int y = std::max(0, height - 5); y < height; y++) {
+                    set_block(x, y, z, BlockType::Sand);
+                }
+            }
+
         }
     }
 }

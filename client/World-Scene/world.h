@@ -52,6 +52,7 @@ glm::vec2 atlas_uv(AtlasTile, glm::vec2 uv);
 #define CHUNK_SIZE_X 32
 #define CHUNK_SIZE_Z 32
 #define CHUNK_SIZE_Y 128
+constexpr int SEA_LEVEL = CHUNK_SIZE_Y / 4;
 
 struct ChunkPos {
     int x;
