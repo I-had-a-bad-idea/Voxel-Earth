@@ -66,7 +66,7 @@ class Chunk {
     std::vector<BlockType> blocks;
 
     public:
-        Chunk(Noise& noise, int chunk_x, int chunk_z);
+        Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x, int chunk_z);
         Chunk();
 
         std::unique_ptr<Object> object;
@@ -94,7 +94,10 @@ class World {
     
     std::unordered_map<ChunkPos, Chunk, ChunkPosHash> chunks;
     
-    Noise noise;
+    Noise height_noise;
+    Noise detail_noise;
+    Noise temperature_noise;
+    Noise moisture_noise;
 
     public:
         World(Renderer& renderer_);

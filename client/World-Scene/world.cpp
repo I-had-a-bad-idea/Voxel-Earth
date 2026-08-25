@@ -1,7 +1,11 @@
 #include "World.h"
 
-World::World(Renderer& renderer_) 
-    : renderer(renderer_), noise(1234, 0.01f, 4, 2.0f, 0.5f)
+World::World(Renderer& renderer_)
+    : renderer(renderer_),
+      height_noise(1234, 0.003f, 5, 2.0f, 0.5f),
+      detail_noise(5678, 0.015f, 3, 2.0f, 0.5f),
+      temperature_noise(9012, 0.0015f, 3, 2.0f, 0.5f),
+      moisture_noise(3456, 0.0015f, 3, 2.0f, 0.5f)
 {}
 
 void World::update_chunks() {
@@ -26,7 +30,7 @@ void World::update_chunks() {
             auto [it, inserted]  = chunks.emplace(
                 std::piecewise_construct,
                 std::forward_as_tuple(pos),
-                std::forward_as_tuple(noise, chunk_x, chunk_z)
+                std::forward_as_tuple(height_noise, detail_noise, temperature_noise, moisture_noise, chunk_x, chunk_z)
             );
 
             Chunk& chunk = it->second;

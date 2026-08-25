@@ -7,7 +7,7 @@ Chunk::Chunk()
     chunk_z = 0;
 }
 
-Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
+Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x_, int chunk_z_)
     : chunk_x(chunk_x_), chunk_z(chunk_z_),
     blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air)
 {
@@ -16,14 +16,24 @@ Chunk::Chunk(Noise& noise, int chunk_x_, int chunk_z_)
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
             int world_z = chunk_z * CHUNK_SIZE_Z + z;
 
-            const float n = noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
-            const float normalized = (n + 1.0f) * 0.5f;
+            float large = height_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
+            float detail = detail_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
 
-            const int height = std::clamp(
-                static_cast<int>(normalized * (CHUNK_SIZE_Y / 4.0f)),
-                0,
-                CHUNK_SIZE_Y - 1
-            );
+            // Convert -1..1 to 0..1
+            large = (large + 1.0f) * 0.5f;
+            detail = (detail + 1.0f) * 0.5f;
+
+            // Large-scale terrain
+            float terrain = large * 0.75f + detail * 0.25f;
+
+            // Make mountains sharper
+            if (terrain > 0.65f) {
+                float mountain = (terrain - 0.65f) / 0.35f;
+                terrain += mountain * mountain * 0.4f;
+            }
+
+            int height = static_cast<int>(terrain * (CHUNK_SIZE_Y * 0.65f));
+            height = std::clamp(height,1, CHUNK_SIZE_Y - 1);
             
             for (int y = 0; y < std::max(0, height - 2); y++) {
                 set_block(x, y, z, BlockType::Stone); // stone 
