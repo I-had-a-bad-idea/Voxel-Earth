@@ -10,6 +10,14 @@
 
 #include "Math/noise.h"
 
+enum class Biome {
+    Plains,
+    Desert,
+    Forest,
+    Tundra,
+    Mountains,
+};
+
 enum class BlockType {
     Air,
     Stone,

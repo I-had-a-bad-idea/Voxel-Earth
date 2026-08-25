@@ -16,6 +16,12 @@ Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise,
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
             int world_z = chunk_z * CHUNK_SIZE_Z + z;
 
+            float temperature = temperature_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
+            float moisture = moisture_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
+
+            temperature = (temperature + 1.0f) * 0.5f;
+            moisture = (moisture + 1.0f) * 0.5f;
+
             float large = height_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
             float detail = detail_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
 
@@ -35,6 +41,25 @@ Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise,
             int height = static_cast<int>(terrain * (CHUNK_SIZE_Y * 0.65f));
             height = std::clamp(height,1, CHUNK_SIZE_Y - 1);
             
+
+            Biome biome;
+            if (height > CHUNK_SIZE_Y * 0.55f) {
+                biome = Biome::Mountains;
+            }
+            else if (temperature < 0.3f) {
+                biome = Biome::Tundra;
+            }
+            else if (temperature > 0.7f && moisture < 0.35f) {
+                biome = Biome::Desert;
+            }
+            else if (moisture > 0.65f) {
+                biome = Biome::Forest;
+            }
+            else {
+                biome = Biome::Plains;
+            }
+
+
             for (int y = 0; y < std::max(0, height - 2); y++) {
                 set_block(x, y, z, BlockType::Stone); // stone 
             }
