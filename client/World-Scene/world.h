@@ -15,6 +15,12 @@ enum class BlockType {
     Stone,
     Dirt,
     Grass,
+    Sand,
+    Water,
+    Snow,
+    Gravel,
+    Wood,
+    Leaves,
 };
 
 struct AtlasTile { // (0, 0) is top left
