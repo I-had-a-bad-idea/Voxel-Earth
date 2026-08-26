@@ -73,8 +73,9 @@ void World::process_completed_chunks() { // on main thread
     GeneratedChunk generated;
     std::size_t uploaded_chunks = 0;
 
-    // upload all generated chunks
-    while (uploaded_chunks < 1) {
+    // Keep generation from building an unbounded queue while allowing the
+    // initial visible area to stream in at several chunks per frame.
+    while (uploaded_chunks < 4) {
         {
             std::lock_guard lock(generation_mutex);
             if (completed_chunks.empty()) {
@@ -169,7 +170,7 @@ void World::setup() {
     scene.cam_pos = glm::vec3(18.0f, 30.0f, 42.0f);
     scene.light_pos = glm::vec3(-80.0f, 140.0f, 40.0f);
     scene.clear_color = glm::vec4(0.10f, 0.20f, 0.32f, 1.0f);
-    scene.far_plane = 320.0f;
+    scene.far_plane = static_cast<float>((RENDER_DISTANCE + 2) * CHUNK_SIZE_X) * 1.5f;
 
     update_chunks();
 }
@@ -190,8 +191,8 @@ BlockType World::get_block(int x, int y, int z) {
     const int chunk_x = std::floor(x / CHUNK_SIZE_X);
     const int chunk_z = std::floor(z / CHUNK_SIZE_Z);
 
-    const int block_x = x - chunk_x;
-    const int block_z = z - chunk_z;
+    const int block_x = x - chunk_x * CHUNK_SIZE_X;
+    const int block_z = z - chunk_z * CHUNK_SIZE_Z;
 
     const ChunkPos pos {chunk_x, chunk_z};
 
@@ -207,8 +208,8 @@ void World::set_block(int x, int y, int z, BlockType block) {
     const int chunk_x = std::floor(x / CHUNK_SIZE_X);
     const int chunk_z = std::floor(z / CHUNK_SIZE_Z);
 
-    const int block_x = x - chunk_x;
-    const int block_z = z - chunk_z;
+    const int block_x = x - chunk_x * CHUNK_SIZE_X;
+    const int block_z = z - chunk_z * CHUNK_SIZE_Z;
 
     const ChunkPos pos {chunk_x, chunk_z};
 
