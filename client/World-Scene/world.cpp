@@ -3,9 +3,9 @@
 World::World(Renderer& renderer_)
     : renderer(renderer_),
       height_noise(1234, 0.003f, 5, 2.0f, 0.5f),
-      detail_noise(1234, 0.015f, 3, 2.0f, 0.5f),
-      temperature_noise(1234, 0.0015f, 3, 2.0f, 0.5f),
-      moisture_noise(1234, 0.0015f, 3, 2.0f, 0.5f)
+      detail_noise(1234, 0.0015f, 3, 2.0f, 0.5f),
+      temperature_noise(1234, 0.00015f, 3, 2.0f, 0.5f),
+      moisture_noise(1234, 0.00015f, 3, 2.0f, 0.5f)
 {
     generation_thread = std::thread(&World::generate_chunks, this);
 }
@@ -75,7 +75,7 @@ void World::process_completed_chunks() { // on main thread
 
     // Keep generation from building an unbounded queue while allowing the
     // initial visible area to stream in at several chunks per frame.
-    while (uploaded_chunks < 4) {
+    while (uploaded_chunks < 8) {
         {
             std::lock_guard lock(generation_mutex);
             if (completed_chunks.empty()) {
