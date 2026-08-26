@@ -28,6 +28,8 @@ class Chunk {
     int chunk_x;
     int chunk_z;
     std::vector<BlockType> blocks;
+    std::vector<uint8_t> column_tops;
+    // the highest block in each collum (used to be mroe efficient when doing stuff (e.g. generating mesh))
 
     public:
         Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x, int chunk_z);
@@ -42,5 +44,8 @@ class Chunk {
         }
         inline void set_block(int x, int y, int z, BlockType block) {
             blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)] = block;
+            if (block != BlockType::Air && y > column_tops[x + CHUNK_SIZE_X * z]) {
+                column_tops[x + CHUNK_SIZE_X * z] = static_cast<uint8_t>(y);
+            }
         }
 };

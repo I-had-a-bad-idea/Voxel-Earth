@@ -1,7 +1,8 @@
 #include "chunk.h"
 
 Chunk::Chunk() 
-    : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air)
+        : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
+            column_tops(CHUNK_SIZE_X * CHUNK_SIZE_Z, 0)
 {
     chunk_x = 0;
     chunk_z = 0;
@@ -9,7 +10,8 @@ Chunk::Chunk()
 
 Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x_, int chunk_z_)
     : chunk_x(chunk_x_), chunk_z(chunk_z_),
-    blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air)
+    blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
+    column_tops(CHUNK_SIZE_X * CHUNK_SIZE_Z, 0)
 {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         int world_x = chunk_x * CHUNK_SIZE_X + x;
@@ -109,6 +111,8 @@ Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise,
 
 MeshData Chunk::generate_mesh_data() {
     MeshData mesh_data;
+    mesh_data.vertices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 16);
+    mesh_data.indices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 24);
 
     // Helper to determine whether a block is solid.
     auto is_solid = [&](int x, int y, int z) -> bool {
@@ -170,7 +174,8 @@ MeshData Chunk::generate_mesh_data() {
 
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
-            for (int y = 0; y < CHUNK_SIZE_Y; y++) {
+            const int column_index = x + CHUNK_SIZE_X * z;
+            for (int y = 0; y <= column_tops[column_index]; y++) {
                 const BlockType& block = get_block(x, y, z);
 
                 if (!is_solid(x, y, z))
