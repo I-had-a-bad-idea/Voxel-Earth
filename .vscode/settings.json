@@ -1,3 +1,7 @@
 {
-    "C_Cpp.default.compilerPath": "C:/ProgramData/mingw64/mingw64/bin/g++.exe"
+    "C_Cpp.default.compilerPath": "C:/ProgramData/mingw64/mingw64/bin/g++.exe",
+    "files.exclude": {
+        "**/*.o": true,
+        "**/*.d": true
+    }
 }
