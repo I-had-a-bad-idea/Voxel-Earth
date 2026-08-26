@@ -166,7 +166,7 @@ void World::setup() {
     );
 
     std::cout << "Configuring scene..\n";
-    scene.cam_pos = glm::vec3(0.0f, -50.0f, 5.0f);
+    scene.cam_pos = glm::vec3(0.0f, 50.0f, 5.0f);
     scene.far_plane = 1000.0f;
 
     update_chunks();
@@ -181,6 +181,10 @@ Scene& World::get_scene() {
 }
 
 BlockType World::get_block(int x, int y, int z) {
+    if (y >= CHUNK_SIZE_Y || y < 0) {
+        return BlockType::Air; // everything above/below chunk is air
+    }
+
     const int chunk_x = std::floor(x / CHUNK_SIZE_X);
     const int chunk_z = std::floor(z / CHUNK_SIZE_Z);
 
@@ -189,6 +193,10 @@ BlockType World::get_block(int x, int y, int z) {
 
     const ChunkPos pos {chunk_x, chunk_z};
 
+    // Due to multithreading chunk may not exist yet, so we return air if it doesn't exist
+    if (!chunks.contains(pos)) {
+        return BlockType::Air;
+    }
     Chunk& chunk = chunks.at(pos);
     return chunk.get_block(block_x, y, block_z);
 }
