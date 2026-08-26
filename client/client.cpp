@@ -13,7 +13,7 @@ int main(void)
     int height = 540;
 
     // Create renderer
-    Renderer renderer("Voxel Engine", width, height, true);
+    Renderer renderer("Voxel Engine", width, height, true, nullptr, 1);
 
     std::cout << "Creating world...\n";
     // Create scene
