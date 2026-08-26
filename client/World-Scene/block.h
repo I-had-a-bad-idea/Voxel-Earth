@@ -28,6 +28,6 @@ struct BlockTexture {
 
 BlockTexture get_block_texture(BlockType type);
 constexpr float ATLAS_WIDTH = 16.0f;
-constexpr float ATLAS_HEIGHT = 20.0f;
+constexpr float ATLAS_HEIGHT = 16.0f;
 
 glm::vec2 atlas_uv(AtlasTile, glm::vec2 uv);
