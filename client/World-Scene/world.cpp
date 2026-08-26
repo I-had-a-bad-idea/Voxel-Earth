@@ -3,9 +3,9 @@
 World::World(Renderer& renderer_)
     : renderer(renderer_),
       height_noise(1234, 0.003f, 5, 2.0f, 0.5f),
-      detail_noise(5678, 0.015f, 3, 2.0f, 0.5f),
-      temperature_noise(9012, 0.0015f, 3, 2.0f, 0.5f),
-      moisture_noise(3456, 0.0015f, 3, 2.0f, 0.5f)
+      detail_noise(1234, 0.015f, 3, 2.0f, 0.5f),
+      temperature_noise(1234, 0.0015f, 3, 2.0f, 0.5f),
+      moisture_noise(1234, 0.0015f, 3, 2.0f, 0.5f)
 {
     generation_thread = std::thread(&World::generate_chunks, this);
 }
@@ -166,8 +166,10 @@ void World::setup() {
     );
 
     std::cout << "Configuring scene..\n";
-    scene.cam_pos = glm::vec3(0.0f, 50.0f, 5.0f);
-    scene.far_plane = 1000.0f;
+    scene.cam_pos = glm::vec3(18.0f, 30.0f, 42.0f);
+    scene.light_pos = glm::vec3(-80.0f, 140.0f, 40.0f);
+    scene.clear_color = glm::vec4(0.10f, 0.20f, 0.32f, 1.0f);
+    scene.far_plane = 320.0f;
 
     update_chunks();
 }
