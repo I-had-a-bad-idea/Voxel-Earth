@@ -2,10 +2,11 @@
 
 World::World(Renderer& renderer_)
     : renderer(renderer_),
-      height_noise(1234, 0.003f, 5, 2.0f, 0.5f),
-      detail_noise(1234, 0.0015f, 3, 2.0f, 0.5f),
-      temperature_noise(1234, 0.00015f, 3, 2.0f, 0.5f),
-      moisture_noise(1234, 0.00015f, 3, 2.0f, 0.5f)
+      continental(1234, 0.0008f, 4, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
+      hills(5678, 0.006f, 4, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
+      mountains(9012, 0.0025f, 5, 2.1f, 0.55f, FastNoiseLite::FractalType_Ridged),
+      temperature(3456, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
+      moisture(7890, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm)
 {
     generation_thread = std::thread(&World::generate_chunks, this);
 }
@@ -39,10 +40,11 @@ void World::generate_chunks() {
 
         // create chunk
         auto chunk = std::make_unique<Chunk>(
-            height_noise,
-            detail_noise,
-            temperature_noise,
-            moisture_noise,
+            continental,
+            hills,
+            mountains,
+            temperature,
+            moisture,
             pos.x,
             pos.z
         );
