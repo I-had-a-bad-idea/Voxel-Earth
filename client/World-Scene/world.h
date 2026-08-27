@@ -36,7 +36,7 @@ class World {
     
     std::unordered_map<ChunkPos, Chunk, ChunkPosHash> chunks;
     
-    Noise height_noise;
+    Noise continental;
     Noise detail_noise;
     Noise temperature_noise;
     Noise moisture_noise;
