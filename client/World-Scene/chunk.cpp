@@ -1,4 +1,5 @@
 #include "chunk.h"
+#include <stdlib.h>     //for using the function sleep
 
 Chunk::Chunk() 
         : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
@@ -13,6 +14,9 @@ Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise,
     blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
     column_tops(CHUNK_SIZE_X * CHUNK_SIZE_Z, 0)
 {
+    _sleep(100); // wait 0.1s
+    
+
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         int world_x = chunk_x * CHUNK_SIZE_X + x;
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
