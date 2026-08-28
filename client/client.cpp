@@ -49,6 +49,7 @@ glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const
 constexpr float move_speed = 150.0f;
 constexpr float mouse_sensitivity = 0.0025f;
 constexpr float gravity_acceleration = 5.0f; // block / s^2
+constexpr float jump_velocity = 10.0f;
 constexpr float friction = 150.0f; // currently a flat value (TODO: make friction block dependent)
 
 constexpr float player_height = 2.0f; 
@@ -155,6 +156,10 @@ int main(void)
         // Apply gravity
         if (!on_ground) {
             camera_velocity.y -= gravity_acceleration * elapsed_time;
+        }
+        // JUmping
+        if (on_ground && keys[SDL_SCANCODE_SPACE]) {
+            camera_velocity.y += jump_velocity; // no * elapsed_time, as this is the velocity, not the acceleration
         }
         
         // Apply movement
