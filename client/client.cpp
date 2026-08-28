@@ -51,6 +51,8 @@ constexpr float mouse_sensitivity = 0.0025f;
 constexpr float gravity_acceleration = 5.0f; // block / s^2
 constexpr float friction = 150.0f; // currently a flat value (TODO: make friction block dependent)
 
+constexpr float player_height = 2.0f; 
+
 int main(void)
 {
     // Define window size
@@ -92,12 +94,12 @@ int main(void)
         // Update world
         world.update(elapsed_time);
         
-        glm::vec3 cam_pos_block_space;
-        cam_pos_block_space.x = std::floor(scene.cam_pos.x);
-        cam_pos_block_space.y = std::floor(scene.cam_pos.y);
-        cam_pos_block_space.z = std::floor(scene.cam_pos.z);
+        glm::vec3 player_pos_block_space;
+        player_pos_block_space.x = std::floor(scene.cam_pos.x);
+        player_pos_block_space.y = std::floor(scene.cam_pos.y - player_height);
+        player_pos_block_space.z = std::floor(scene.cam_pos.z);
 
-        bool on_ground = world.get_block(cam_pos_block_space.x, cam_pos_block_space.y, cam_pos_block_space.z) != BlockType::Air;
+        bool on_ground = world.get_block(player_pos_block_space.x, player_pos_block_space.y, player_pos_block_space.z) != BlockType::Air;
 
         // Input
         const bool* keys = SDL_GetKeyboardState(nullptr);
@@ -105,7 +107,7 @@ int main(void)
         float speed = length(camera_velocity);
 
         // Friction
-        if (on_ground) {
+        if (on_ground && speed > 0.0f) {
             camera_velocity.y = 0; // no vertical movement
 
             float new_speed = std::max(0.0f, speed - friction);
@@ -121,6 +123,7 @@ int main(void)
             camera_transform * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)
         ));
         forward.y = 0; // dont allow upward movement
+        forward = glm::normalize(forward);
 
         glm::vec3 right = glm::normalize(glm::vec3(
             camera_transform * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f)
@@ -148,12 +151,16 @@ int main(void)
         
         // Apply gravity
         if (!on_ground) {
-            camera_velocity.y -= gravity_acceleration;
+            camera_velocity.y -= gravity_acceleration * elapsed_time;
         }
         
         // Apply movement
-        camera_velocity += forward * movement.z * move_speed;
-        camera_velocity += right * movement.x * move_speed;
+        glm::vec3 wish_direction = forward * movement.z + right * movement.x;
+        if (glm::length(wish_direction) > 0.0f)
+            wish_direction = glm::normalize(wish_direction);
+
+        camera_velocity += wish_direction * move_speed * elapsed_time;
+
 
         // Apply velocity
         scene.cam_pos += camera_velocity * elapsed_time;
