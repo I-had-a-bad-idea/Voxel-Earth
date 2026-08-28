@@ -6,43 +6,50 @@
 #include <stdio.h>
 #include "World-Scene/world.h"
 
-glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const glm::vec3& vector, const float collision_margin = 0.1f) {
-    Scene& scene = world.get_scene();
-    glm::vec3 end = start + vector;
-
-    glm::vec3 direction = end - start;
-    float distance = glm::length(direction);
-
-    if (distance <= 0.0f)
-        return glm::vec3(0.0f);
-
-    direction /= distance;
-
-    // Small steps prevent us from skipping thin blocks at high speed.
+glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const glm::vec3& vector) {
+    constexpr float player_half_width = 0.3f;
+    constexpr float player_height = 2.0f;
     constexpr float step_size = 0.05f;
+    constexpr float overlap_epsilon = 0.0001f;
 
-    for (float travelled = 0.0f; travelled <= distance; travelled += step_size) {
-        glm::vec3 position = start + direction * travelled; 
+    auto collides = [&](const glm::vec3& feet) {
+        const int min_x = static_cast<int>(std::floor(feet.x - player_half_width));
+        const int max_x = static_cast<int>(std::floor(feet.x + player_half_width - overlap_epsilon));
+        const int min_y = static_cast<int>(std::floor(feet.y));
+        const int max_y = static_cast<int>(std::floor(feet.y + player_height - overlap_epsilon));
+        const int min_z = static_cast<int>(std::floor(feet.z - player_half_width));
+        const int max_z = static_cast<int>(std::floor(feet.z + player_half_width - overlap_epsilon));
 
-        glm::vec3 collision_position = position + direction * collision_margin; // Don't allow the camera closer than collision_margin to a block.
+        for (int x = min_x; x <= max_x; ++x) {
+            for (int y = min_y; y <= max_y; ++y) {
+                for (int z = min_z; z <= max_z; ++z) {
+                    if (world.get_block(x, y, z) != BlockType::Air)
+                        return true;
+                }
+            }
+        }
+        return false;
+    };
 
-        int x = static_cast<int>(std::floor(collision_position.x));
-        int y = static_cast<int>(std::floor(collision_position.y));
-        int z = static_cast<int>(std::floor(collision_position.z));
+    glm::vec3 position = start;
+    for (int axis = 0; axis < 3; ++axis) {
+        const float distance = vector[axis];
+        const int steps = static_cast<int>(std::ceil(std::abs(distance) / step_size));
+        const float increment = steps > 0 ? distance / static_cast<float>(steps) : 0.0f;
 
-        BlockType block = world.get_block(x, y, z);
-
-        if (block != BlockType::Air) {
-            // Collision occurred. Return the movement that was possible
-            // before entering the block.
-            float safe_distance = std::max(0.0f, travelled - step_size);
-
-            return direction * safe_distance;
+        for (int step = 0; step < steps; ++step) {
+            glm::vec3 candidate = position;
+            candidate[axis] += increment;
+            if (collides(candidate)) {
+                if (axis == 1 && distance < 0.0f)
+                    position.y = std::floor(position.y);
+                break;
+            }
+            position = candidate;
         }
     }
 
-    // No collision.
-    return vector;
+    return position - start;
 }
 
 
@@ -189,7 +196,7 @@ int main(void)
         // Apply velocity
         glm::vec3 desired_movement = camera_velocity * elapsed_time;
 
-        glm::vec3 allowed_movement = vector_collides_with_block(world, player_pos, desired_movement, 0.2);
+        glm::vec3 allowed_movement = vector_collides_with_block(world, player_pos, desired_movement);
         scene.cam_pos += allowed_movement;
 
         if (keys[SDL_SCANCODE_ESCAPE]) {
@@ -230,7 +237,9 @@ int main(void)
 
             // Zooming with the mouse wheel 
             if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-                scene.cam_pos += forward * (float)event.wheel.y * move_speed * 0.1f;
+                glm::vec3 wheel_movement = forward * (float)event.wheel.y * move_speed * 0.1f;
+                glm::vec3 wheel_start = scene.cam_pos - glm::vec3(0.0f, player_height, 0.0f);
+                scene.cam_pos += vector_collides_with_block(world, wheel_start, wheel_movement);
             }
         }
     }
