@@ -38,7 +38,6 @@ Chunk::Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise,
             mountains = (mountains + 1.0f) * 0.5f;
 
             // CONTINENTAL REGIONS
-
             float coast_factor = 0.0f;
             float highland_factor = 0.0f;
             float mountain_factor = 0.0f;

@@ -6,6 +6,51 @@
 #include <stdio.h>
 #include "World-Scene/world.h"
 
+glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const glm::vec3& vector, const float collision_margin = 0.1f) {
+    Scene& scene = world.get_scene();
+    glm::vec3 end = start + vector;
+
+    glm::vec3 direction = end - start;
+    float distance = glm::length(direction);
+
+    if (distance <= 0.0f)
+        return glm::vec3(0.0f);
+
+    direction /= distance;
+
+    // Small steps prevent us from skipping thin blocks at high speed.
+    constexpr float step_size = 0.05f;
+
+    for (float travelled = 0.0f; travelled <= distance; travelled += step_size) {
+        glm::vec3 position = start + direction * travelled; 
+
+        glm::vec3 collision_position = position + direction * collision_margin; // Don't allow the camera closer than collision_margin to a block.
+
+        int x = static_cast<int>(std::floor(collision_position.x));
+        int y = static_cast<int>(std::floor(collision_position.y));
+        int z = static_cast<int>(std::floor(collision_position.z));
+
+        BlockType block = world.get_block(x, y, z);
+
+        if (block != BlockType::Air) {
+            // Collision occurred. Return the movement that was possible
+            // before entering the block.
+            float safe_distance = std::max(0.0f, travelled - step_size);
+
+            return direction * safe_distance;
+        }
+    }
+
+    // No collision.
+    return vector;
+}
+
+
+constexpr float move_speed = 150.0f;
+constexpr float mouse_sensitivity = 0.0025f;
+constexpr float gravity_acceleration = 5.0f; // block / s^2
+constexpr float friction = 150.0f; // currently a flat value (TODO: make friction block dependent)
+
 int main(void)
 {
     // Define window size
@@ -22,8 +67,6 @@ int main(void)
     Scene& scene = world.get_scene();
 
     glm::vec3 camera_velocity(0.0f);
-    float move_speed = 150.0f;
-    float mouse_sensitivity = 0.0025f;
     float pitch = 0.0f;
 
     std::cout << "Starting rendering..." << std::endl;
@@ -49,10 +92,27 @@ int main(void)
         // Update world
         world.update(elapsed_time);
         
+        glm::vec3 cam_pos_block_space;
+        cam_pos_block_space.x = std::floor(scene.cam_pos.x);
+        cam_pos_block_space.y = std::floor(scene.cam_pos.y);
+        cam_pos_block_space.z = std::floor(scene.cam_pos.z);
+
+        bool on_ground = world.get_block(cam_pos_block_space.x, cam_pos_block_space.y, cam_pos_block_space.z) != BlockType::Air;
+
         // Input
         const bool* keys = SDL_GetKeyboardState(nullptr);
 
-        camera_velocity = glm::vec3(0.0f);
+        float speed = length(camera_velocity);
+
+        // Friction
+        if (on_ground) {
+            camera_velocity.y = 0; // no vertical movement
+
+            float new_speed = std::max(0.0f, speed - friction);
+            camera_velocity = (camera_velocity / speed) * new_speed;
+        }
+
+
         glm::mat4 camera_transform = glm::translate(
             glm::mat4(1.0f),
             scene.cam_pos
@@ -60,32 +120,43 @@ int main(void)
         glm::vec3 forward = glm::normalize(glm::vec3(
             camera_transform * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)
         ));
+        forward.y = 0; // dont allow upward movement
+
         glm::vec3 right = glm::normalize(glm::vec3(
             camera_transform * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f)
         ));
         
+
+        glm::vec3 movement(0.0f);
         // Forward / backward
         if (keys[SDL_SCANCODE_W])
-            camera_velocity.z += 1.0f;
+            movement.z += 1.0f;
 
         if (keys[SDL_SCANCODE_S])
-            camera_velocity.z -= 1.0f;
+            movement.z -= 1.0f;
 
         // Left / right
         if (keys[SDL_SCANCODE_A])
-            camera_velocity.x -= 1.0f;
+            movement.x -= 1.0f;
 
         if (keys[SDL_SCANCODE_D])
-            camera_velocity.x += 1.0f;
+            movement.x += 1.0f;
 
         // Normalize so diagonal movement is not faster
-        if (glm::length(camera_velocity) > 0.0f)
-            camera_velocity = glm::normalize(camera_velocity);
-    
-
+        if (glm::length(movement) > 0.0f)
+            movement = glm::normalize(movement);
+        
+        // Apply gravity
+        if (!on_ground) {
+            camera_velocity.y -= gravity_acceleration;
+        }
+        
         // Apply movement
-        scene.cam_pos += forward * camera_velocity.z * move_speed * elapsed_time;
-        scene.cam_pos += right * camera_velocity.x * move_speed * elapsed_time;
+        camera_velocity += forward * movement.z * move_speed;
+        camera_velocity += right * movement.x * move_speed;
+
+        // Apply velocity
+        scene.cam_pos += camera_velocity * elapsed_time;
 
         if (keys[SDL_SCANCODE_ESCAPE]) {
             quit = true;
