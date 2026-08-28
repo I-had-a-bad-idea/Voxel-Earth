@@ -237,9 +237,7 @@ int main(void)
 
             // Zooming with the mouse wheel 
             if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-                glm::vec3 wheel_movement = forward * (float)event.wheel.y * move_speed * 0.1f;
-                glm::vec3 wheel_start = scene.cam_pos - glm::vec3(0.0f, player_height, 0.0f);
-                scene.cam_pos += vector_collides_with_block(world, wheel_start, wheel_movement);
+                scene.cam_pos += forward * (float)event.wheel.y * move_speed * 0.1f;
             }
         }
     }
