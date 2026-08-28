@@ -220,8 +220,8 @@ BlockType World::get_block(int x, int y, int z) {
         return BlockType::Air; // everything above/below chunk is air
     }
 
-    const int chunk_x = std::floor(x / CHUNK_SIZE_X);
-    const int chunk_z = std::floor(z / CHUNK_SIZE_Z);
+    const int chunk_x = static_cast<int>(std::floor(static_cast<float>(x) / CHUNK_SIZE_X));
+    const int chunk_z = static_cast<int>(std::floor(static_cast<float>(z) / CHUNK_SIZE_Z));
 
     const int block_x = x - chunk_x * CHUNK_SIZE_X;
     const int block_z = z - chunk_z * CHUNK_SIZE_Z;

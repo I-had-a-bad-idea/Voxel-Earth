@@ -6,6 +6,63 @@
 #include <stdio.h>
 #include "World-Scene/world.h"
 
+glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const glm::vec3& vector) {
+    constexpr float player_half_width = 0.3f;
+    constexpr float player_height = 2.0f;
+    constexpr float step_size = 0.05f;
+    constexpr float overlap_epsilon = 0.0001f;
+
+    auto collides = [&](const glm::vec3& feet) {
+        const int min_x = static_cast<int>(std::floor(feet.x - player_half_width));
+        const int max_x = static_cast<int>(std::floor(feet.x + player_half_width - overlap_epsilon));
+        const int min_y = static_cast<int>(std::floor(feet.y));
+        const int max_y = static_cast<int>(std::floor(feet.y + player_height - overlap_epsilon));
+        const int min_z = static_cast<int>(std::floor(feet.z - player_half_width));
+        const int max_z = static_cast<int>(std::floor(feet.z + player_half_width - overlap_epsilon));
+
+        for (int x = min_x; x <= max_x; ++x) {
+            for (int y = min_y; y <= max_y; ++y) {
+                for (int z = min_z; z <= max_z; ++z) {
+                    if (world.get_block(x, y, z) != BlockType::Air)
+                        return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    glm::vec3 position = start;
+    for (int axis = 0; axis < 3; ++axis) {
+        const float distance = vector[axis];
+        const int steps = static_cast<int>(std::ceil(std::abs(distance) / step_size));
+        const float increment = steps > 0 ? distance / static_cast<float>(steps) : 0.0f;
+
+        for (int step = 0; step < steps; ++step) {
+            glm::vec3 candidate = position;
+            candidate[axis] += increment;
+            if (collides(candidate)) {
+                if (axis == 1 && distance < 0.0f)
+                    position.y = std::floor(position.y);
+                break;
+            }
+            position = candidate;
+        }
+    }
+
+    return position - start;
+}
+
+
+constexpr float move_speed = 15.0f; // blocks/sec
+constexpr float ground_acceleration = 80.0f; // blocks / s^2
+constexpr float air_acceleration = 20.0f; // blocks / s^2
+constexpr float mouse_sensitivity = 0.0025f;
+constexpr float gravity_acceleration = 5.0f; // blocks / s^2
+constexpr float jump_velocity = 3.0f;
+constexpr float friction = 30.0f; // currently a flat value (TODO: make friction block dependent)
+
+constexpr float player_height = 2.0f; 
+
 int main(void)
 {
     // Define window size
@@ -22,8 +79,6 @@ int main(void)
     Scene& scene = world.get_scene();
 
     glm::vec3 camera_velocity(0.0f);
-    float move_speed = 150.0f;
-    float mouse_sensitivity = 0.0025f;
     float pitch = 0.0f;
 
     std::cout << "Starting rendering..." << std::endl;
@@ -49,10 +104,30 @@ int main(void)
         // Update world
         world.update(elapsed_time);
         
+        glm::vec3 player_pos = scene.cam_pos;
+        player_pos.y -= player_height;
+
+        glm::vec3 player_pos_block_space;
+        player_pos_block_space.x = std::floor(player_pos.x);
+        player_pos_block_space.y = std::floor(player_pos.y);
+        player_pos_block_space.z = std::floor(player_pos.z);
+
+        bool on_ground = world.get_block(player_pos_block_space.x, player_pos_block_space.y - 1, player_pos_block_space.z) != BlockType::Air;
+
         // Input
         const bool* keys = SDL_GetKeyboardState(nullptr);
 
-        camera_velocity = glm::vec3(0.0f);
+        float speed = length(camera_velocity);
+
+        // Friction
+        if (on_ground && speed > 0.0f) {
+            camera_velocity.y = 0; // no vertical movement
+
+            float new_speed = std::max(0.0f, speed - friction * elapsed_time);
+            camera_velocity = (camera_velocity / speed) * new_speed;
+        }
+
+
         glm::mat4 camera_transform = glm::translate(
             glm::mat4(1.0f),
             scene.cam_pos
@@ -60,32 +135,69 @@ int main(void)
         glm::vec3 forward = glm::normalize(glm::vec3(
             camera_transform * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)
         ));
+        forward.y = 0; // dont allow upward movement
+        forward = glm::normalize(forward);
+
         glm::vec3 right = glm::normalize(glm::vec3(
             camera_transform * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f)
         ));
         
+
+        glm::vec3 movement(0.0f);
         // Forward / backward
         if (keys[SDL_SCANCODE_W])
-            camera_velocity.z += 1.0f;
+            movement.z += 1.0f;
 
         if (keys[SDL_SCANCODE_S])
-            camera_velocity.z -= 1.0f;
+            movement.z -= 1.0f;
 
         // Left / right
         if (keys[SDL_SCANCODE_A])
-            camera_velocity.x -= 1.0f;
+            movement.x -= 1.0f;
 
         if (keys[SDL_SCANCODE_D])
-            camera_velocity.x += 1.0f;
+            movement.x += 1.0f;
 
         // Normalize so diagonal movement is not faster
-        if (glm::length(camera_velocity) > 0.0f)
-            camera_velocity = glm::normalize(camera_velocity);
-    
-
+        if (glm::length(movement) > 0.0f)
+            movement = glm::normalize(movement);
+        
+        // Apply gravity
+        if (!on_ground) {
+            camera_velocity.y -= gravity_acceleration * elapsed_time;
+        }
+        // JUmping
+        if (on_ground && keys[SDL_SCANCODE_SPACE]) {
+            camera_velocity.y = jump_velocity; // no * elapsed_time, as this is the velocity, not the acceleration
+        }
+        
         // Apply movement
-        scene.cam_pos += forward * camera_velocity.z * move_speed * elapsed_time;
-        scene.cam_pos += right * camera_velocity.x * move_speed * elapsed_time;
+        glm::vec3 horizontal_vel (camera_velocity.x, 0, camera_velocity.z);
+        glm::vec3 wish_direction = forward * movement.z + right * movement.x;
+        if (glm::length(wish_direction) > 0.0f) {
+            wish_direction = glm::normalize(wish_direction);
+
+            float acceleration = on_ground ? ground_acceleration : air_acceleration; // use correct acceleration
+
+            horizontal_vel += wish_direction * acceleration * elapsed_time;
+        }
+        // Clamp horizontal speed
+        float horizontal_speed = glm::length(horizontal_vel);
+
+        if (horizontal_speed > move_speed) {
+            horizontal_vel = (horizontal_vel / horizontal_speed) * move_speed;
+        }
+
+        // Put horizontal velocity back
+        camera_velocity.x = horizontal_vel.x;
+        camera_velocity.z = horizontal_vel.z;
+
+
+        // Apply velocity
+        glm::vec3 desired_movement = camera_velocity * elapsed_time;
+
+        glm::vec3 allowed_movement = vector_collides_with_block(world, player_pos, desired_movement);
+        scene.cam_pos += allowed_movement;
 
         if (keys[SDL_SCANCODE_ESCAPE]) {
             quit = true;
@@ -125,7 +237,9 @@ int main(void)
 
             // Zooming with the mouse wheel 
             if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-                scene.cam_pos += forward * (float)event.wheel.y * move_speed * 0.1f;
+                glm::vec3 wheel_movement = forward * (float)event.wheel.y * move_speed * 0.1f;
+                glm::vec3 wheel_start = scene.cam_pos - glm::vec3(0.0f, player_height, 0.0f);
+                scene.cam_pos += vector_collides_with_block(world, wheel_start, wheel_movement);
             }
         }
     }
