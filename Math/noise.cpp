@@ -1,12 +1,12 @@
 #include "noise.h"
 
 
-Noise::Noise(int seed, float frequency, int fractal_octaves, float fractal_lacunarity, float fractal_gain) {
+Noise::Noise(int seed, float frequency, int fractal_octaves, float fractal_lacunarity, float fractal_gain, FastNoiseLite::FractalType fractal_type) {
     noise.SetSeed(seed);
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
     noise.SetFrequency(frequency);
     
-    noise.SetFractalType(FastNoiseLite::FractalType_FBm);
+    noise.SetFractalType(fractal_type);
     noise.SetFractalOctaves(fractal_octaves);
     noise.SetFractalLacunarity(fractal_lacunarity);
     noise.SetFractalGain(fractal_gain);

@@ -1,4 +1,5 @@
 #include "chunk.h"
+#include <stdlib.h>     //for using the function sleep
 
 Chunk::Chunk() 
         : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
@@ -7,51 +8,101 @@ Chunk::Chunk()
     chunk_x = 0;
     chunk_z = 0;
 }
-
-Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x_, int chunk_z_)
+Chunk::Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise,
+             Noise& temperature_noise, Noise& moisture_noise, int chunk_x_, int chunk_z_)
     : chunk_x(chunk_x_), chunk_z(chunk_z_),
-    blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
-    column_tops(CHUNK_SIZE_X * CHUNK_SIZE_Z, 0)
+      blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
+      column_tops(CHUNK_SIZE_X * CHUNK_SIZE_Z, 0)
 {
     for (int x = 0; x < CHUNK_SIZE_X; x++) {
         int world_x = chunk_x * CHUNK_SIZE_X + x;
         for (int z = 0; z < CHUNK_SIZE_Z; z++) {
             int world_z = chunk_z * CHUNK_SIZE_Z + z;
 
+            // TEMPERATURE / MOISTURE
             float temperature = temperature_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
             float moisture = moisture_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
 
+            // Convert -1..1 -> 0..1
             temperature = (temperature + 1.0f) * 0.5f;
             moisture = (moisture + 1.0f) * 0.5f;
 
-            float large = height_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
-            float detail = detail_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
+            // TERRAIN NOISE
+            float continental = continental_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
+            float hills = hill_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
+            float mountains = mountain_noise.at(static_cast<float>(world_x), static_cast<float>(world_z));
 
-            // Convert -1..1 to 0..1
-            large = (large + 1.0f) * 0.5f;
-            detail = (detail + 1.0f) * 0.5f;
+            // Convert -1..1 -> 0..1
+            continental = (continental + 1.0f) * 0.5f;
+            hills = (hills + 1.0f) * 0.5f;
+            mountains = (mountains + 1.0f) * 0.5f;
 
-            // Large-scale terrain
-            float terrain = large * 0.75f + detail * 0.25f;
+            // CONTINENTAL REGIONS
 
-            // Make mountains sharper
-            if (terrain > 0.65f) {
-                float mountain = (terrain - 0.65f) / 0.35f;
-                terrain += mountain * mountain * 0.4f;
+            float coast_factor = 0.0f;
+            float highland_factor = 0.0f;
+            float mountain_factor = 0.0f;
+
+            // Coast: transition between ocean and land.
+            if (continental >= 0.38f && continental < 0.50f) {
+                float t = (continental - 0.38f) / 0.12f;
+                coast_factor = t * t * (3.0f - 2.0f * t);
             }
 
-            int height = static_cast<int>(terrain * (CHUNK_SIZE_Y * 0.65f));
-            height = std::clamp(height,1, CHUNK_SIZE_Y - 1);
-            
+            // Highlands begin around 0.55.
+            if (continental > 0.55f) {
+                float t = std::clamp((continental - 0.55f) / 0.20f, 0.0f, 1.0f);
+                highland_factor = t * t * (3.0f - 2.0f * t);
+            }
 
+            // Mountain regions begin around 0.62.
+            if (continental > 0.62f) {
+                float t = std::clamp((continental - 0.62f) / 0.25f, 0.0f, 1.0f);
+                mountain_factor = t * t * (3.0f - 2.0f * t);
+            }
+
+            // BASE TERRAIN
+            float terrain = continental * 0.55f + hills * 0.45f;
+            const float sea_level = static_cast<float>(SEA_LEVEL);
+            float height_f = sea_level + (terrain - 0.45f) * (CHUNK_SIZE_Y * 0.45f);
+
+            // HIGHLANDS
+            height_f += highland_factor * CHUNK_SIZE_Y * 0.12f;
+
+            // MOUNTAINS
+            // Ridged noise creates the actual mountain ridges.
+            float mountain_shape = mountains * mountains;
+
+            height_f += mountain_shape * mountain_factor * CHUNK_SIZE_Y * 0.55f;
+
+            // Add some smaller variation to mountain slopes.
+            if (mountain_factor > 0.0f) {
+                height_f += hills * mountain_factor * CHUNK_SIZE_Y * 0.10f;
+            }
+
+            // OCEAN FLOOR
+            if (continental < 0.42f) {
+                float depth = (0.42f - continental) / 0.42f;
+                height_f = sea_level - depth * CHUNK_SIZE_Y * 0.20f;
+            }
+
+            // COAST
+            if (coast_factor > 0.0f) {
+                height_f = glm::mix(height_f, sea_level, coast_factor * 0.35f);
+            }
+
+            int height = std::clamp(static_cast<int>(height_f), 1, CHUNK_SIZE_Y - 1);
+
+            // BIOME
             Biome biome;
-            if (height > CHUNK_SIZE_Y * 0.7f) {
+
+            if (mountain_factor > 0.45f) {
                 biome = Biome::Mountains;
             }
-            else if (temperature < 0.3f) {
+            else if (temperature < 0.30f) {
                 biome = Biome::Tundra;
             }
-            else if (temperature > 0.7f && moisture < 0.35f) {
+            else if (temperature > 0.70f && moisture < 0.35f) {
                 biome = Biome::Desert;
             }
             else if (moisture > 0.65f) {
@@ -61,50 +112,63 @@ Chunk::Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise,
                 biome = Biome::Plains;
             }
 
-            // oceans and beaches
+            // OCEAN
             if (height < SEA_LEVEL) {
                 for (int y = 0; y <= height; y++) {
                     if (y < height - 3)
-                        set_block(x, y, z, BlockType::Stone); // fill with stone
+                        set_block(x, y, z, BlockType::Stone);
                     else
-                        set_block(x, y, z, BlockType::Sand); // sand
+                        set_block(x, y, z, BlockType::Sand);
                 }
+
                 for (int y = height + 1; y <= SEA_LEVEL; y++) {
-                    set_block(x, y, z, BlockType::Water); // fill lowlands with water
+                    set_block(x, y, z, BlockType::Water);
                 }
+
+                column_tops[x + CHUNK_SIZE_X * z] = SEA_LEVEL;
                 continue;
             }
+
+            // BEACH
             const bool beach = height <= SEA_LEVEL + 2;
 
-            // calculate surface
+            // SURFACE
             BlockType surface = BlockType::Grass;
-            if (beach) {
+
+            if (beach || biome == Biome::Desert) {
                 surface = BlockType::Sand;
-            } else if (biome == Biome::Desert) {
-                surface = BlockType::Sand;
-            } else if (biome == Biome::Tundra) {
+            }
+            else if (biome == Biome::Tundra) {
                 surface = BlockType::Snow;
             }
-            
+            else if (biome == Biome::Mountains) {
+                if (height > CHUNK_SIZE_Y * 0.72f)
+                    surface = BlockType::Snow;
+                else
+                    surface = BlockType::Stone;
+            }
 
-            // fill world with stone and dirt
+            // FILL TERRAIN
             for (int y = 0; y < height; y++) {
                 BlockType type = BlockType::Stone;
-                if ((y >= height - 3) && !(biome == Biome::Mountains)) { // mountains are just stone
+
+                if (y >= height - 3 && biome != Biome::Mountains)
                     type = BlockType::Dirt;
-                }
+
                 set_block(x, y, z, type);
             }
-            // set surface
+
+            // SURFACE BLOCK
             set_block(x, height, z, surface);
-            
-            // Fill deserts with sand
+
+            // DESERT SAND
             if (biome == Biome::Desert) {
                 for (int y = std::max(0, height - 5); y < height; y++) {
                     set_block(x, y, z, BlockType::Sand);
                 }
             }
 
+            column_tops[x + CHUNK_SIZE_X * z] = height;
         }
     }
 }

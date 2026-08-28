@@ -32,7 +32,7 @@ class Chunk {
     // the highest block in each collum (used to be mroe efficient when doing stuff (e.g. generating mesh))
 
     public:
-        Chunk(Noise& height_noise, Noise& detail_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x, int chunk_z);
+        Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x, int chunk_z);
         Chunk();
 
         std::unique_ptr<Object> object;

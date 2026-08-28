@@ -2,10 +2,11 @@
 
 World::World(Renderer& renderer_)
     : renderer(renderer_),
-      height_noise(1234, 0.003f, 5, 2.0f, 0.5f),
-      detail_noise(1234, 0.0015f, 3, 2.0f, 0.5f),
-      temperature_noise(1234, 0.00015f, 3, 2.0f, 0.5f),
-      moisture_noise(1234, 0.00015f, 3, 2.0f, 0.5f)
+      continental(1234, 0.0008f, 4, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
+      hills(5678, 0.006f, 4, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
+      mountains(9012, 0.0025f, 5, 2.1f, 0.55f, FastNoiseLite::FractalType_Ridged),
+      temperature(3456, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
+      moisture(7890, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm)
 {
     generation_thread = std::thread(&World::generate_chunks, this);
 }
@@ -39,10 +40,11 @@ void World::generate_chunks() {
 
         // create chunk
         auto chunk = std::make_unique<Chunk>(
-            height_noise,
-            detail_noise,
-            temperature_noise,
-            moisture_noise,
+            continental,
+            hills,
+            mountains,
+            temperature,
+            moisture,
             pos.x,
             pos.z
         );
@@ -117,6 +119,36 @@ void World::update_chunks() {
     int camera_chunk_x = static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
 
+
+    ChunkPos current_chunk_pos{camera_chunk_x, camera_chunk_z};
+
+    // Queue the current chunk first
+    queue_chunk_generation(current_chunk_pos);
+
+    // Generate outward in expanding rings
+    for (int step = 1; step <= RENDER_DISTANCE; ++step) {
+        int min_x = camera_chunk_x - step;
+        int max_x = camera_chunk_x + step;
+        int min_z = camera_chunk_z - step;
+        int max_z = camera_chunk_z + step;
+
+        // Bottom row
+        for (int x = min_x; x <= max_x; ++x) {
+            queue_chunk_generation(ChunkPos{x, min_z});
+        }
+
+        // Top row
+        for (int x = min_x; x <= max_x; ++x) {
+            queue_chunk_generation(ChunkPos{x, max_z});
+        }
+
+        // Left and right columns, excluding corners
+        for (int z = min_z + 1; z < max_z; ++z) {
+            queue_chunk_generation(ChunkPos{min_x, z});
+            queue_chunk_generation(ChunkPos{max_x, z});
+        }
+    }
+
     for (int dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
         for (int dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
             int chunk_x = camera_chunk_x + dx;
@@ -167,7 +199,7 @@ void World::setup() {
     );
 
     std::cout << "Configuring scene..\n";
-    scene.cam_pos = glm::vec3(18.0f, 30.0f, 42.0f);
+    scene.cam_pos = glm::vec3(18.0f, 50.0f, 42.0f);
     scene.light_pos = glm::vec3(-80.0f, 140.0f, 40.0f);
     scene.clear_color = glm::vec4(0.10f, 0.20f, 0.32f, 1.0f);
     scene.far_plane = static_cast<float>((RENDER_DISTANCE + 2) * CHUNK_SIZE_X) * 1.5f;
