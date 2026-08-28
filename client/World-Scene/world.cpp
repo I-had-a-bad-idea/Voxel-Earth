@@ -116,6 +116,14 @@ void World::process_completed_chunks() { // on main thread
 }
 
 void World::update_chunks() {
+    glm::mat4 camera_transform = glm::translate(
+        glm::mat4(1.0f),
+        scene.cam_pos
+    ) * glm::mat4_cast(scene.cam_orientation);
+    glm::vec3 camera_forward = glm::normalize(glm::vec3(
+        camera_transform * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)
+    ));
+
     int camera_chunk_x = static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
 
@@ -149,17 +157,6 @@ void World::update_chunks() {
         }
     }
 
-    for (int dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
-        for (int dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
-            int chunk_x = camera_chunk_x + dx;
-            int chunk_z = camera_chunk_z + dz;
-
-            ChunkPos pos {chunk_x, chunk_z};
-
-            queue_chunk_generation(pos);
-        }
-    }
-
     process_completed_chunks();
 
 
@@ -178,6 +175,39 @@ void World::update_chunks() {
         renderer.destroy_mesh(*chunk.mesh);
         chunks.erase(pos);
     }
+
+
+    // Frustum culling
+    const float half_fov = glm::radians(scene.fovy * 0.7); // dont use 0.5, since then it culls to early
+
+    // Approximate the chunk with a bounding sphere.
+    const float half_x = CHUNK_SIZE_X * 0.5f;
+    const float half_y = CHUNK_SIZE_Y * 0.5f;
+    const float half_z = CHUNK_SIZE_Z * 0.5f;
+    const float chunk_radius = std::sqrt(half_x * half_x + half_y * half_y + half_z * half_z);
+
+    for (const auto& [pos, chunk] : chunks) {
+        glm::vec3 chunk_center((pos.x + 0.5f) * CHUNK_SIZE_X, CHUNK_SIZE_Y * 0.5f, (pos.z + 0.5f) * CHUNK_SIZE_Z);
+
+        glm::vec3 to_chunk = chunk_center - scene.cam_pos;
+        float distance = glm::length(to_chunk);
+
+        // Camera is inside/very close to the chunk.
+        if (distance <= chunk_radius) {
+            chunk.object->visible = true;
+            continue;
+        }
+
+        glm::vec3 direction = to_chunk / distance;
+        float angle = glm::dot(camera_forward, direction);
+
+        // Expand the viewing cone by the angular radius of the chunk.
+        float angular_radius = std::asin(std::min(1.0f, chunk_radius / distance));
+        float min_angle = std::cos(half_fov + angular_radius);
+
+        chunk.object->visible = angle >= min_angle;
+    }
+
 }
 
 void World::setup() {
