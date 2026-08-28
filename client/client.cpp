@@ -94,12 +94,15 @@ int main(void)
         // Update world
         world.update(elapsed_time);
         
-        glm::vec3 player_pos_block_space;
-        player_pos_block_space.x = std::floor(scene.cam_pos.x);
-        player_pos_block_space.y = std::floor(scene.cam_pos.y - player_height);
-        player_pos_block_space.z = std::floor(scene.cam_pos.z);
+        glm::vec3 player_pos = scene.cam_pos;
+        player_pos.y -= player_height;
 
-        bool on_ground = world.get_block(player_pos_block_space.x, player_pos_block_space.y, player_pos_block_space.z) != BlockType::Air;
+        glm::vec3 player_pos_block_space;
+        player_pos_block_space.x = std::floor(player_pos.x);
+        player_pos_block_space.y = std::floor(player_pos.y);
+        player_pos_block_space.z = std::floor(player_pos.z);
+
+        bool on_ground = world.get_block(player_pos_block_space.x, player_pos_block_space.y - 1, player_pos_block_space.z) != BlockType::Air;
 
         // Input
         const bool* keys = SDL_GetKeyboardState(nullptr);
@@ -163,7 +166,10 @@ int main(void)
 
 
         // Apply velocity
-        scene.cam_pos += camera_velocity * elapsed_time;
+        glm::vec3 desired_movement = camera_velocity * elapsed_time;
+
+        glm::vec3 allowed_movement = vector_collides_with_block(world, player_pos, desired_movement);
+        scene.cam_pos += allowed_movement;
 
         if (keys[SDL_SCANCODE_ESCAPE]) {
             quit = true;
