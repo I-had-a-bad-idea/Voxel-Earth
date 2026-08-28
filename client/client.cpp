@@ -46,11 +46,13 @@ glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const
 }
 
 
-constexpr float move_speed = 150.0f;
+constexpr float move_speed = 15.0f; // blocks/sec
+constexpr float ground_acceleration = 80.0f; // blocks / s^2
+constexpr float air_acceleration = 20.0f; // blocks / s^2
 constexpr float mouse_sensitivity = 0.0025f;
-constexpr float gravity_acceleration = 5.0f; // block / s^2
-constexpr float jump_velocity = 10.0f;
-constexpr float friction = 150.0f; // currently a flat value (TODO: make friction block dependent)
+constexpr float gravity_acceleration = 5.0f; // blocks / s^2
+constexpr float jump_velocity = 3.0f;
+constexpr float friction = 30.0f; // currently a flat value (TODO: make friction block dependent)
 
 constexpr float player_height = 2.0f; 
 
@@ -114,7 +116,7 @@ int main(void)
         if (on_ground && speed > 0.0f) {
             camera_velocity.y = 0; // no vertical movement
 
-            float new_speed = std::max(0.0f, speed - friction);
+            float new_speed = std::max(0.0f, speed - friction * elapsed_time);
             camera_velocity = (camera_velocity / speed) * new_speed;
         }
 
@@ -159,21 +161,35 @@ int main(void)
         }
         // JUmping
         if (on_ground && keys[SDL_SCANCODE_SPACE]) {
-            camera_velocity.y += jump_velocity; // no * elapsed_time, as this is the velocity, not the acceleration
+            camera_velocity.y = jump_velocity; // no * elapsed_time, as this is the velocity, not the acceleration
         }
         
         // Apply movement
+        glm::vec3 horizontal_vel (camera_velocity.x, 0, camera_velocity.z);
         glm::vec3 wish_direction = forward * movement.z + right * movement.x;
-        if (glm::length(wish_direction) > 0.0f)
+        if (glm::length(wish_direction) > 0.0f) {
             wish_direction = glm::normalize(wish_direction);
 
-        camera_velocity += wish_direction * move_speed * elapsed_time;
+            float acceleration = on_ground ? ground_acceleration : air_acceleration; // use correct acceleration
+
+            horizontal_vel += wish_direction * acceleration * elapsed_time;
+        }
+        // Clamp horizontal speed
+        float horizontal_speed = glm::length(horizontal_vel);
+
+        if (horizontal_speed > move_speed) {
+            horizontal_vel = (horizontal_vel / horizontal_speed) * move_speed;
+        }
+
+        // Put horizontal velocity back
+        camera_velocity.x = horizontal_vel.x;
+        camera_velocity.z = horizontal_vel.z;
 
 
         // Apply velocity
         glm::vec3 desired_movement = camera_velocity * elapsed_time;
 
-        glm::vec3 allowed_movement = vector_collides_with_block(world, player_pos, desired_movement);
+        glm::vec3 allowed_movement = vector_collides_with_block(world, player_pos, desired_movement, 0.2);
         scene.cam_pos += allowed_movement;
 
         if (keys[SDL_SCANCODE_ESCAPE]) {
