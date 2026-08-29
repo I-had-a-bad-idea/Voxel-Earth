@@ -177,20 +177,8 @@ int main(void)
             movement.x += 1.0f;
 
         // Placing / Breaking
-
         glm::vec3 block_looked_at = get_block_looked_at(world, camera_view_direction);
         bool block_found = block_looked_at.x >= 0.0f;
-        uint32_t mouse_state = SDL_GetMouseState(nullptr, nullptr);
-        if (mouse_state & SDL_BUTTON_MASK(SDL_BUTTON_LEFT) && block_found) {
-            // Break block
-            world.set_block(block_looked_at.x, block_looked_at.y, block_looked_at.z, BlockType::Air);
-        }
-        if (mouse_state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT) && block_found) {
-            // Place block
-            world.set_block(block_looked_at.x, block_looked_at.y, block_looked_at.z, BlockType::Stone);
-            // TODO: Make placed block choosable
-        }
-
 
         // Normalize so diagonal movement is not faster
         if (glm::length(movement) > 0.0f)
@@ -268,6 +256,23 @@ int main(void)
 
                 scene.cam_rot = glm::eulerAngles(scene.cam_orientation);
             }
+
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                if (!block_found) {
+                    continue;
+                }
+                if (event.button.button == SDL_BUTTON_LEFT) {
+                    // Break block
+                    world.set_block(block_looked_at.x, block_looked_at.y, block_looked_at.z, BlockType::Air);
+                }
+                if (event.button.button == SDL_BUTTON_RIGHT) {
+                    // Place block
+                    world.set_block(block_looked_at.x, block_looked_at.y, block_looked_at.z, BlockType::Stone);
+                    // TODO: Make placed block choosable
+                }
+                
+            }
+
 
             // Zooming with the mouse wheel 
             if (event.type == SDL_EVENT_MOUSE_WHEEL) {
