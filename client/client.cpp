@@ -15,13 +15,11 @@ constexpr float gravity_acceleration = 5.0f; // blocks / s^2
 constexpr float jump_velocity = 3.0f;
 constexpr float friction = 30.0f; // currently a flat value (TODO: make friction block dependent)
 constexpr float player_height = 1.0f; 
-
+constexpr float step_size = 0.05f;
+constexpr float player_half_width = 0.3f;
+constexpr float overlap_epsilon = 0.0001f;
 
 glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const glm::vec3& vector) {
-    constexpr float player_half_width = 0.3f;
-    constexpr float player_height = 2.0f;
-    constexpr float step_size = 0.05f;
-    constexpr float overlap_epsilon = 0.0001f;
 
     auto collides = [&](const glm::vec3& feet) {
         const int min_x = static_cast<int>(std::floor(feet.x - player_half_width));
@@ -63,10 +61,17 @@ glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const
     return position - start;
 }
 
-glm::vec3 get_block_looked_at(World& world, const glm::vec3& look_direction) {
-    constexpr float step_size = 0.05f;
+struct BlockHit {
+    glm::ivec3 block;
+    glm::ivec3 place_block;
+    bool found;
+};
 
+
+BlockHit get_block_looked_at(World& world, const glm::vec3& look_direction) {
     glm::vec3 position = world.get_scene().cam_pos;
+    glm::vec3 previous_block(-1);
+
     for (float distance = 0.0f; distance <= max_block_look_distance; distance += step_size) {
         glm::vec3 candidate = position + look_direction * distance;
         int block_x = static_cast<int>(std::floor(candidate.x));
@@ -74,11 +79,12 @@ glm::vec3 get_block_looked_at(World& world, const glm::vec3& look_direction) {
         int block_z = static_cast<int>(std::floor(candidate.z));
 
         if (world.get_block(block_x, block_y, block_z) != BlockType::Air) {
-            return glm::vec3(block_x, block_y, block_z);
+            return {glm::vec3(block_x, block_y, block_z), previous_block, true};
         }
+        previous_block = glm::vec3(block_x, block_y, block_z);
     }
 
-    return glm::vec3(-1.0f); // No block found
+    return {glm::vec3(-1.0f), glm::vec3(-1.0f), false}; // No block found
 }
 
 int main(void)
@@ -176,10 +182,6 @@ int main(void)
         if (keys[SDL_SCANCODE_D])
             movement.x += 1.0f;
 
-        // Placing / Breaking
-        glm::vec3 block_looked_at = get_block_looked_at(world, camera_view_direction);
-        bool block_found = block_looked_at.x >= 0.0f;
-
         // Normalize so diagonal movement is not faster
         if (glm::length(movement) > 0.0f)
             movement = glm::normalize(movement);
@@ -258,16 +260,19 @@ int main(void)
             }
 
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-                if (!block_found) {
+                // Placing / Breaking
+                BlockHit hit = get_block_looked_at(world, camera_view_direction);
+
+                if (!hit.found) {
                     continue;
                 }
                 if (event.button.button == SDL_BUTTON_LEFT) {
                     // Break block
-                    world.set_block(block_looked_at.x, block_looked_at.y, block_looked_at.z, BlockType::Air);
+                    world.set_block(hit.block.x, hit.block.y, hit.block.z, BlockType::Air);
                 }
                 if (event.button.button == SDL_BUTTON_RIGHT) {
-                    // Place block
-                    world.set_block(block_looked_at.x, block_looked_at.y, block_looked_at.z, BlockType::Stone);
+                    // Place block (directly infront of the block looked at)
+                    world.set_block(hit.place_block.x, hit.place_block.y, hit.place_block.z, BlockType::Stone);
                     // TODO: Make placed block choosable
                 }
                 
