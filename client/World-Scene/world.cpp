@@ -104,6 +104,7 @@ void World::process_completed_chunks() { // on main thread
         // create mesh and object
         Chunk& chunk = it->second;
         chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(generated.mesh_data)));
+        chunk.dirty = false;
         chunk.object = std::make_unique<Object>(
             chunk.mesh.get(),
             atlas_material.get(),
@@ -174,6 +175,21 @@ void World::update_chunks() {
         scene.remove_object_from_scene(chunk.object.get());
         renderer.destroy_mesh(*chunk.mesh);
         chunks.erase(pos);
+    }
+
+    // Process dirty chunks
+    for (auto& [pos, chunk] : chunks) {
+        if (chunk.dirty) {
+            MeshData mesh_data = chunk.generate_mesh_data(); // create mesh data
+            scene.remove_object_from_scene(chunk.object.get());
+            // destroy old mesh
+            renderer.destroy_mesh(*chunk.mesh);
+            // load new mesh
+            chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(mesh_data)));
+            chunk.object.get()->mesh = chunk.mesh.get();
+            scene.add_object_to_scene(chunk.object.get());
+            chunk.dirty = false;
+        }
     }
 
 
@@ -267,8 +283,12 @@ BlockType World::get_block(int x, int y, int z) {
 }
 
 void World::set_block(int x, int y, int z, BlockType block) {
-    const int chunk_x = std::floor(x / CHUNK_SIZE_X);
-    const int chunk_z = std::floor(z / CHUNK_SIZE_Z);
+    const int chunk_x = static_cast<int>(std::floor(
+        static_cast<float>(x) / CHUNK_SIZE_X
+    ));
+    const int chunk_z = static_cast<int>(std::floor(
+        static_cast<float>(z) / CHUNK_SIZE_Z
+    ));
 
     const int block_x = x - chunk_x * CHUNK_SIZE_X;
     const int block_z = z - chunk_z * CHUNK_SIZE_Z;
@@ -277,4 +297,23 @@ void World::set_block(int x, int y, int z, BlockType block) {
 
     Chunk& chunk = chunks.at(pos);
     chunk.set_block(block_x, y, block_z, block);
+
+    auto mark_neighbor_dirty = [this](ChunkPos neighbor_pos) {
+        if (auto neighbor = chunks.find(neighbor_pos); neighbor != chunks.end()) {
+            neighbor->second.dirty = true;
+        }
+    };
+
+    if (block_x == 0) {
+        mark_neighbor_dirty({chunk_x - 1, chunk_z});
+    }
+    if (block_x == CHUNK_SIZE_X - 1) {
+        mark_neighbor_dirty({chunk_x + 1, chunk_z});
+    }
+    if (block_z == 0) {
+        mark_neighbor_dirty({chunk_x, chunk_z - 1});
+    }
+    if (block_z == CHUNK_SIZE_Z - 1) {
+        mark_neighbor_dirty({chunk_x, chunk_z + 1});
+    }
 }

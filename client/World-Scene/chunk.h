@@ -37,6 +37,7 @@ class Chunk {
 
         std::unique_ptr<Object> object;
         std::unique_ptr<Mesh> mesh;
+        bool dirty = true; // whether the chunk mesh needs to be updated
 
         MeshData generate_mesh_data();
         inline BlockType get_block(int x, int y, int z) {
@@ -44,8 +45,26 @@ class Chunk {
         }
         inline void set_block(int x, int y, int z, BlockType block) {
             blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)] = block;
-            if (block != BlockType::Air && y > column_tops[x + CHUNK_SIZE_X * z]) {
-                column_tops[x + CHUNK_SIZE_X * z] = static_cast<uint8_t>(y);
+            
+            int column_index = x + CHUNK_SIZE_X * z;
+            
+            // If placing a non-Air block higher than current top, update it
+            if (block != BlockType::Air && y > column_tops[column_index]) {
+                column_tops[column_index] = static_cast<uint8_t>(y);
             }
+            // If removing a block that was at the top, recalculate the column top
+            else if (block == BlockType::Air && y == column_tops[column_index]) {
+                // Find the new highest non-Air block in this column
+                int new_top = 0;
+                for (int cy = y; cy >= 0; --cy) {
+                    if (get_block(x, cy, z) != BlockType::Air) {
+                        new_top = cy;
+                        break;
+                    }
+                }
+                column_tops[column_index] = static_cast<uint8_t>(new_top);
+            }
+            
+            dirty = true;
         }
 };
