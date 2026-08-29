@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include <VGL/object.h>
 
 enum class BlockType {

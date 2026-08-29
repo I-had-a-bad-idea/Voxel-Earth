@@ -1,4 +1,6 @@
 #include "chunk.h"
+
+#include <functional>
 #include <stdlib.h>     //for using the function sleep
 
 Chunk::Chunk() 
@@ -174,12 +176,10 @@ Chunk::Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise,
 
 MeshData Chunk::generate_mesh_data() {
     MeshData mesh_data;
-    mesh_data.vertices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 16);
-    mesh_data.indices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 24);
+    mesh_data.vertices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y * 4);
+    mesh_data.indices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y * 6);
 
-    // Helper to determine whether a block is solid.
     auto is_solid = [&](int x, int y, int z) -> bool {
-        // Outside the chunk = air.
         if (x < 0 || x >= CHUNK_SIZE_X ||
             y < 0 || y >= CHUNK_SIZE_Y ||
             z < 0 || z >= CHUNK_SIZE_Z) {
@@ -189,43 +189,23 @@ MeshData Chunk::generate_mesh_data() {
         return get_block(x, y, z) != BlockType::Air;
     };
 
-    // Add a quad to the mesh.
-    auto add_face = [&](const glm::vec3& position,
-                        const glm::vec3& normal,
-                        const glm::vec3& v0,
-                        const glm::vec3& v1,
-                        const glm::vec3& v2,
-                        const glm::vec3& v3,
-                        AtlasTile tile) {
+    auto same_tile = [](const AtlasTile& lhs, const AtlasTile& rhs) {
+        return lhs.x == rhs.x && lhs.y == rhs.y;
+    };
 
-        uint32_t start_index =
-            static_cast<uint32_t>(mesh_data.vertices.size());
+    auto add_face_quad = [&](const glm::vec3& v0,
+                             const glm::vec3& v1,
+                             const glm::vec3& v2,
+                             const glm::vec3& v3,
+                             const glm::vec3& normal,
+                             AtlasTile tile) {
+        uint32_t start_index = static_cast<uint32_t>(mesh_data.vertices.size());
 
-        mesh_data.vertices.push_back({
-            position + v0,
-            normal,
-            atlas_uv(tile, glm::vec2(0.0f, 0.0f))
-        });
+        mesh_data.vertices.push_back({ v0, normal, atlas_uv(tile, glm::vec2(0.0f, 0.0f)) });
+        mesh_data.vertices.push_back({ v1, normal, atlas_uv(tile, glm::vec2(1.0f, 0.0f)) });
+        mesh_data.vertices.push_back({ v2, normal, atlas_uv(tile, glm::vec2(1.0f, 1.0f)) });
+        mesh_data.vertices.push_back({ v3, normal, atlas_uv(tile, glm::vec2(0.0f, 1.0f)) });
 
-        mesh_data.vertices.push_back({
-            position + v1,
-            normal,
-            atlas_uv(tile, glm::vec2(1.0f, 0.0f))
-        });
-
-        mesh_data.vertices.push_back({
-            position + v2,
-            normal,
-            atlas_uv(tile, glm::vec2(1.0f, 1.0f))
-        });
-
-        mesh_data.vertices.push_back({
-            position + v3,
-            normal,
-            atlas_uv(tile, glm::vec2(0.0f, 1.0f))
-        });
-
-        // Two triangles.
         mesh_data.indices.push_back(start_index + 0);
         mesh_data.indices.push_back(start_index + 1);
         mesh_data.indices.push_back(start_index + 2);
@@ -235,114 +215,238 @@ MeshData Chunk::generate_mesh_data() {
         mesh_data.indices.push_back(start_index + 0);
     };
 
-    for (int x = 0; x < CHUNK_SIZE_X; x++) {
-        for (int z = 0; z < CHUNK_SIZE_Z; z++) {
-            const int column_index = x + CHUNK_SIZE_X * z;
-            for (int y = 0; y <= column_tops[column_index]; y++) {
-                const BlockType& block = get_block(x, y, z);
+    auto greedy_merge = [&](int width,
+                            int height,
+                            const std::function<AtlasTile(int, int)>& get_cell,
+                            const std::function<void(int, int, int, int, AtlasTile)>& emit_rect) {
+        const AtlasTile invalid_tile { UINT32_MAX, UINT32_MAX };
+        std::vector<std::vector<AtlasTile>> mask(height, std::vector<AtlasTile>(width, invalid_tile));
 
-                if (!is_solid(x, y, z))
-                    continue;
-
-                BlockTexture texture = get_block_texture(block);
-
-                glm::vec3 position(
-                    static_cast<float>(x),
-                    static_cast<float>(y),
-                    static_cast<float>(z)
-                );
-
-                // -X face
-                if (!is_solid(x - 1, y, z)) {
-                    add_face(
-                        position,
-                        glm::vec3(-1, 0, 0),
-
-                        glm::vec3(0, 0, 1),
-                        glm::vec3(0, 0, 0),
-                        glm::vec3(0, 1, 0),
-                        glm::vec3(0, 1, 1),
-
-                        texture.side
-                    );
-                }
-
-                // +X face
-                if (!is_solid(x + 1, y, z)) {
-                    add_face(
-                        position,
-                        glm::vec3(1, 0, 0),
-
-                        glm::vec3(1, 0, 0),
-                        glm::vec3(1, 0, 1),
-                        glm::vec3(1, 1, 1),
-                        glm::vec3(1, 1, 0),
-
-                        texture.side
-                    );
-                }
-
-                // -Y face
-                if (!is_solid(x, y - 1, z)) {
-                    add_face(
-                        position,
-                        glm::vec3(0, -1, 0),
-
-                        glm::vec3(0, 0, 0),
-                        glm::vec3(1, 0, 0),
-                        glm::vec3(1, 0, 1),
-                        glm::vec3(0, 0, 1),
-
-                        texture.bottom
-                    );
-                }
-
-                // +Y face
-                if (!is_solid(x, y + 1, z)) {
-                    add_face(
-                        position,
-                        glm::vec3(0, 1, 0),
-
-                        glm::vec3(0, 1, 0),
-                        glm::vec3(0, 1, 1),
-                        glm::vec3(1, 1, 1),
-                        glm::vec3(1, 1, 0),
-
-                        texture.top
-                    );
-                }
-
-                // -Z face
-                if (!is_solid(x, y, z - 1)) {
-                    add_face(
-                        position,
-                        glm::vec3(0, 0, -1),
-
-                        glm::vec3(1, 0, 0),
-                        glm::vec3(0, 0, 0),
-                        glm::vec3(0, 1, 0),
-                        glm::vec3(1, 1, 0),
-
-                        texture.side
-                    );
-                }
-
-                // +Z face
-                if (!is_solid(x, y, z + 1)) {
-                    add_face(
-                        position,
-                        glm::vec3(0, 0, 1),
-
-                        glm::vec3(0, 0, 1),
-                        glm::vec3(1, 0, 1),
-                        glm::vec3(1, 1, 1),
-                        glm::vec3(0, 1, 1),
-
-                        texture.side
-                    );
-                }
+        for (int v = 0; v < height; ++v) {
+            for (int u = 0; u < width; ++u) {
+                mask[v][u] = get_cell(u, v);
             }
         }
+
+        std::vector<std::vector<bool>> visited(height, std::vector<bool>(width, false));
+
+        for (int v = 0; v < height; ++v) {
+            for (int u = 0; u < width; ++u) {
+                if (visited[v][u] || mask[v][u].x == UINT32_MAX) {
+                    continue;
+                }
+
+                AtlasTile tile = mask[v][u];
+                int u0 = u;
+                int u1 = u;
+
+                while (u1 + 1 < width) {
+                    const int next_index = u1 + 1;
+                    if (visited[v][next_index] || mask[v][next_index].x == UINT32_MAX || !same_tile(mask[v][next_index], tile)) {
+                        break;
+                    }
+                    u1 = next_index;
+                }
+
+                int v1 = v;
+                while (v1 + 1 < height) {
+                    bool row_matches = true;
+                    for (int uu = u0; uu <= u1; ++uu) {
+                        if (visited[v1 + 1][uu] || mask[v1 + 1][uu].x == UINT32_MAX || !same_tile(mask[v1 + 1][uu], tile)) {
+                            row_matches = false;
+                            break;
+                        }
+                    }
+
+                    if (!row_matches) {
+                        break;
+                    }
+                    ++v1;
+                }
+
+                for (int yy = v; yy <= v1; ++yy) {
+                    for (int xx = u0; xx <= u1; ++xx) {
+                        visited[yy][xx] = true;
+                    }
+                }
+
+                emit_rect(u0, v, u1, v1, tile);
+            }
+        }
+    };
+
+    auto emit_x_face = [&](int x, bool positive_x, int min_v, int max_v, int min_u, int max_u, AtlasTile tile) {
+        const float x_coord = static_cast<float>(positive_x ? x + 1 : x);
+        const float v0 = static_cast<float>(min_v);
+        const float v1 = static_cast<float>(max_v + 1);
+        const float u0 = static_cast<float>(min_u);
+        const float u1 = static_cast<float>(max_u + 1);
+
+        if (positive_x) {
+            add_face_quad(
+                { x_coord, v0, u0 },
+                { x_coord, v0, u1 },
+                { x_coord, v1, u1 },
+                { x_coord, v1, u0 },
+                { 1.0f, 0.0f, 0.0f },
+                tile
+            );
+        } else {
+            add_face_quad(
+                { x_coord, v0, u1 },
+                { x_coord, v0, u0 },
+                { x_coord, v1, u0 },
+                { x_coord, v1, u1 },
+                { -1.0f, 0.0f, 0.0f },
+                tile
+            );
+        }
+    };
+
+    auto emit_y_face = [&](int y, bool positive_y, int min_u, int max_u, int min_v, int max_v, AtlasTile tile) {
+        const float y_coord = static_cast<float>(positive_y ? y + 1 : y);
+        const float u0 = static_cast<float>(min_u);
+        const float u1 = static_cast<float>(max_u + 1);
+        const float v0 = static_cast<float>(min_v);
+        const float v1 = static_cast<float>(max_v + 1);
+
+        if (positive_y) {
+            add_face_quad(
+                { u0, y_coord, v0 },
+                { u0, y_coord, v1 },
+                { u1, y_coord, v1 },
+                { u1, y_coord, v0 },
+                { 0.0f, 1.0f, 0.0f },
+                tile
+            );
+        } else {
+            add_face_quad(
+                { u0, y_coord, v0 },
+                { u1, y_coord, v0 },
+                { u1, y_coord, v1 },
+                { u0, y_coord, v1 },
+                { 0.0f, -1.0f, 0.0f },
+                tile
+            );
+        }
+    };
+
+    auto emit_z_face = [&](int z, bool positive_z, int min_u, int max_u, int min_v, int max_v, AtlasTile tile) {
+        const float z_coord = static_cast<float>(positive_z ? z + 1 : z);
+        const float u0 = static_cast<float>(min_u);
+        const float u1 = static_cast<float>(max_u + 1);
+        const float v0 = static_cast<float>(min_v);
+        const float v1 = static_cast<float>(max_v + 1);
+
+        if (positive_z) {
+            add_face_quad(
+                { u0, v0, z_coord },
+                { u1, v0, z_coord },
+                { u1, v1, z_coord },
+                { u0, v1, z_coord },
+                { 0.0f, 0.0f, 1.0f },
+                tile
+            );
+        } else {
+            add_face_quad(
+                { u1, v0, z_coord },
+                { u0, v0, z_coord },
+                { u0, v1, z_coord },
+                { u1, v1, z_coord },
+                { 0.0f, 0.0f, -1.0f },
+                tile
+            );
+        }
+    };
+
+    for (int x = 0; x < CHUNK_SIZE_X; ++x) {
+        greedy_merge(
+            CHUNK_SIZE_Z,
+            CHUNK_SIZE_Y,
+            [&](int z, int y) -> AtlasTile {
+                if (!is_solid(x, y, z) || is_solid(x - 1, y, z)) {
+                    return { UINT32_MAX, UINT32_MAX };
+                }
+                return get_block_texture(get_block(x, y, z)).side;
+            },
+            [&](int z0, int y0, int z1, int y1, AtlasTile tile) {
+                emit_x_face(x, false, y0, y1, z0, z1, tile);
+            }
+        );
+
+        greedy_merge(
+            CHUNK_SIZE_Z,
+            CHUNK_SIZE_Y,
+            [&](int z, int y) -> AtlasTile {
+                if (!is_solid(x, y, z) || is_solid(x + 1, y, z)) {
+                    return { UINT32_MAX, UINT32_MAX };
+                }
+                return get_block_texture(get_block(x, y, z)).side;
+            },
+            [&](int z0, int y0, int z1, int y1, AtlasTile tile) {
+                emit_x_face(x, true, y0, y1, z0, z1, tile);
+            }
+        );
+    }
+
+    for (int y = 0; y < CHUNK_SIZE_Y; ++y) {
+        greedy_merge(
+            CHUNK_SIZE_X,
+            CHUNK_SIZE_Z,
+            [&](int x, int z) -> AtlasTile {
+                if (!is_solid(x, y, z) || is_solid(x, y - 1, z)) {
+                    return { UINT32_MAX, UINT32_MAX };
+                }
+                return get_block_texture(get_block(x, y, z)).bottom;
+            },
+            [&](int x0, int z0, int x1, int z1, AtlasTile tile) {
+                emit_y_face(y, false, x0, x1, z0, z1, tile);
+            }
+        );
+
+        greedy_merge(
+            CHUNK_SIZE_X,
+            CHUNK_SIZE_Z,
+            [&](int x, int z) -> AtlasTile {
+                if (!is_solid(x, y, z) || is_solid(x, y + 1, z)) {
+                    return { UINT32_MAX, UINT32_MAX };
+                }
+                return get_block_texture(get_block(x, y, z)).top;
+            },
+            [&](int x0, int z0, int x1, int z1, AtlasTile tile) {
+                emit_y_face(y, true, x0, x1, z0, z1, tile);
+            }
+        );
+    }
+
+    for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
+        greedy_merge(
+            CHUNK_SIZE_X,
+            CHUNK_SIZE_Y,
+            [&](int x, int y) -> AtlasTile {
+                if (!is_solid(x, y, z) || is_solid(x, y, z - 1)) {
+                    return { UINT32_MAX, UINT32_MAX };
+                }
+                return get_block_texture(get_block(x, y, z)).side;
+            },
+            [&](int x0, int y0, int x1, int y1, AtlasTile tile) {
+                emit_z_face(z, false, x0, x1, y0, y1, tile);
+            }
+        );
+
+        greedy_merge(
+            CHUNK_SIZE_X,
+            CHUNK_SIZE_Y,
+            [&](int x, int y) -> AtlasTile {
+                if (!is_solid(x, y, z) || is_solid(x, y, z + 1)) {
+                    return { UINT32_MAX, UINT32_MAX };
+                }
+                return get_block_texture(get_block(x, y, z)).side;
+            },
+            [&](int x0, int y0, int x1, int y1, AtlasTile tile) {
+                emit_z_face(z, true, x0, x1, y0, y1, tile);
+            }
+        );
     }
 
     return mesh_data;
