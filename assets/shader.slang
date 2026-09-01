@@ -2,6 +2,7 @@ struct VSInput {
     float3 Pos;
     float3 Normal;
     float2 UV;
+    uint2 AtlasTile;
 };
 
 Sampler2D textures[];
@@ -33,6 +34,7 @@ struct VSOutput {
     float3 ViewVec;
     uint32_t InstanceIndex;
     uint32_t TextureIndex;
+    uint2 AtlasTile;
 };
 
 [shader("vertex")]
@@ -52,6 +54,7 @@ VSOutput main(
 
     output.Normal = mul((float3x3)viewModel, input.Normal);
     output.UV = input.UV;
+    output.AtlasTile = input.AtlasTile;
 
     output.Pos = mul(
         shaderData->projection,
@@ -70,6 +73,9 @@ VSOutput main(
     return output;
 }
 
+static const float ATLAS_WIDTH = 16.0f;
+static const float ATLAS_HEIGHT = 16.0f;
+
 [shader("fragment")]
 float4 main(VSOutput input) {
     // Phong lighting
@@ -81,7 +87,16 @@ float4 main(VSOutput input) {
     float3 ambient = 0.1;
 
     float3 diffuse = max(dot(N, L), 0.0025);
+    
+    // Repeat the texture for every block in a greedy quad.
+    float2 localUV = frac(input.UV);
+
+    float2 tileSize = 1.0 / float2(ATLAS_WIDTH, ATLAS_HEIGHT);
+    float2 tileOffset = float2(input.AtlasTile.x, (ATLAS_HEIGHT - 1) - input.AtlasTile.y);
+
+    float2 atlasUV = tileOffset * tileSize + localUV * tileSize;
+
     // Sample from texture
-    float3 color = textures[NonUniformResourceIndex(input.TextureIndex)].Sample(input.UV).rgb * input.Factor;
-    return float4((ambient + diffuse) * color.rgb, 1.0);
+    float3 color = textures[NonUniformResourceIndex(input.TextureIndex)].Sample(atlasUV).rgb * input.Factor;
+    return float4((ambient + diffuse) * color, 1.0);
 }

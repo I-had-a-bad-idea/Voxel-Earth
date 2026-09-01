@@ -198,13 +198,17 @@ MeshData Chunk::generate_mesh_data() {
                              const glm::vec3& v2,
                              const glm::vec3& v3,
                              const glm::vec3& normal,
-                             AtlasTile tile) {
+                             AtlasTile tile,
+                             const glm::vec2& uv0,
+                             const glm::vec2& uv1,
+                             const glm::vec2& uv2,
+                             const glm::vec2& uv3) {
         uint32_t start_index = static_cast<uint32_t>(mesh_data.vertices.size());
 
-        mesh_data.vertices.push_back({ v0, normal, atlas_uv(tile, glm::vec2(0.0f, 0.0f)) });
-        mesh_data.vertices.push_back({ v1, normal, atlas_uv(tile, glm::vec2(1.0f, 0.0f)) });
-        mesh_data.vertices.push_back({ v2, normal, atlas_uv(tile, glm::vec2(1.0f, 1.0f)) });
-        mesh_data.vertices.push_back({ v3, normal, atlas_uv(tile, glm::vec2(0.0f, 1.0f)) });
+        mesh_data.vertices.push_back({ v0, normal, uv0, { tile.x, tile.y } });
+        mesh_data.vertices.push_back({ v1, normal, uv1, { tile.x, tile.y } });
+        mesh_data.vertices.push_back({ v2, normal, uv2, { tile.x, tile.y } });
+        mesh_data.vertices.push_back({ v3, normal, uv3, { tile.x, tile.y } });
 
         mesh_data.indices.push_back(start_index + 0);
         mesh_data.indices.push_back(start_index + 1);
@@ -282,6 +286,11 @@ MeshData Chunk::generate_mesh_data() {
         const float u0 = static_cast<float>(min_u);
         const float u1 = static_cast<float>(max_u + 1);
 
+        const glm::vec2 uv0_0 = { static_cast<float>(min_u), static_cast<float>(min_v) };
+        const glm::vec2 uv1_0 = { static_cast<float>(max_u + 1), static_cast<float>(min_v) };
+        const glm::vec2 uv2_0 = { static_cast<float>(max_u + 1), static_cast<float>(max_v + 1) };
+        const glm::vec2 uv3_0 = { static_cast<float>(min_u), static_cast<float>(max_v + 1) };
+
         if (positive_x) {
             add_face_quad(
                 { x_coord, v0, u0 },
@@ -289,7 +298,11 @@ MeshData Chunk::generate_mesh_data() {
                 { x_coord, v1, u1 },
                 { x_coord, v1, u0 },
                 { 1.0f, 0.0f, 0.0f },
-                tile
+                tile,
+                uv0_0,
+                uv1_0,
+                uv2_0,
+                uv3_0
             );
         } else {
             add_face_quad(
@@ -298,7 +311,11 @@ MeshData Chunk::generate_mesh_data() {
                 { x_coord, v1, u0 },
                 { x_coord, v1, u1 },
                 { -1.0f, 0.0f, 0.0f },
-                tile
+                tile,
+                uv1_0,
+                uv0_0,
+                uv3_0,
+                uv2_0
             );
         }
     };
@@ -310,6 +327,11 @@ MeshData Chunk::generate_mesh_data() {
         const float v0 = static_cast<float>(min_v);
         const float v1 = static_cast<float>(max_v + 1);
 
+        const glm::vec2 uv0_0 = { static_cast<float>(min_u), static_cast<float>(min_v) };
+        const glm::vec2 uv1_0 = { static_cast<float>(max_u + 1), static_cast<float>(min_v) };
+        const glm::vec2 uv2_0 = { static_cast<float>(max_u + 1), static_cast<float>(max_v + 1) };
+        const glm::vec2 uv3_0 = { static_cast<float>(min_u), static_cast<float>(max_v + 1) };
+
         if (positive_y) {
             add_face_quad(
                 { u0, y_coord, v0 },
@@ -317,7 +339,11 @@ MeshData Chunk::generate_mesh_data() {
                 { u1, y_coord, v1 },
                 { u1, y_coord, v0 },
                 { 0.0f, 1.0f, 0.0f },
-                tile
+                tile,
+                uv0_0,
+                uv3_0,
+                uv2_0,
+                uv1_0
             );
         } else {
             add_face_quad(
@@ -326,7 +352,11 @@ MeshData Chunk::generate_mesh_data() {
                 { u1, y_coord, v1 },
                 { u0, y_coord, v1 },
                 { 0.0f, -1.0f, 0.0f },
-                tile
+                tile,
+                uv0_0,
+                uv1_0,
+                uv2_0,
+                uv3_0
             );
         }
     };
@@ -338,6 +368,11 @@ MeshData Chunk::generate_mesh_data() {
         const float v0 = static_cast<float>(min_v);
         const float v1 = static_cast<float>(max_v + 1);
 
+        const glm::vec2 uv0_0 = { static_cast<float>(min_u), static_cast<float>(min_v) };
+        const glm::vec2 uv1_0 = { static_cast<float>(max_u + 1), static_cast<float>(min_v) };
+        const glm::vec2 uv2_0 = { static_cast<float>(max_u + 1), static_cast<float>(max_v + 1) };
+        const glm::vec2 uv3_0 = { static_cast<float>(min_u), static_cast<float>(max_v + 1) };
+
         if (positive_z) {
             add_face_quad(
                 { u0, v0, z_coord },
@@ -345,7 +380,11 @@ MeshData Chunk::generate_mesh_data() {
                 { u1, v1, z_coord },
                 { u0, v1, z_coord },
                 { 0.0f, 0.0f, 1.0f },
-                tile
+                tile,
+                uv0_0,
+                uv1_0,
+                uv2_0,
+                uv3_0
             );
         } else {
             add_face_quad(
@@ -354,7 +393,11 @@ MeshData Chunk::generate_mesh_data() {
                 { u0, v1, z_coord },
                 { u1, v1, z_coord },
                 { 0.0f, 0.0f, -1.0f },
-                tile
+                tile,
+                uv1_0,
+                uv0_0,
+                uv3_0,
+                uv2_0
             );
         }
     };
