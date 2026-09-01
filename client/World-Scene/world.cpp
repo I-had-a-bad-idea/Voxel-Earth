@@ -177,20 +177,38 @@ void World::update_chunks() {
         chunks.erase(pos);
     }
 
-    // Process dirty chunks
+    // Process dirty chunks. Keep old GPU buffers alive until all replacements are loaded,
+    // then wait for the device once before destroying them.
+    std::vector<Mesh> old_meshes;
+
     for (auto& [pos, chunk] : chunks) {
-        if (chunk.dirty) {
-            MeshData mesh_data = chunk.generate_mesh_data(); // create mesh data
-            scene.remove_object_from_scene(chunk.object.get());
-            // destroy old mesh
-            renderer.destroy_mesh(*chunk.mesh);
-            // load new mesh
-            chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(mesh_data)));
-            chunk.object.get()->mesh = chunk.mesh.get();
-            scene.add_object_to_scene(chunk.object.get());
-            chunk.dirty = false;
-        }
+        if (!chunk.dirty)
+            continue;
+
+        // Generate CPU-side mesh data.
+        MeshData mesh_data = chunk.generate_mesh_data();
+
+        // Remove the old object from the scene before replacing its mesh.
+        scene.remove_object_from_scene(chunk.object.get());
+
+        // Move the actual Mesh object out of the unique_ptr.
+        old_meshes.push_back(std::move(*chunk.mesh));
+        chunk.mesh.reset();
+
+        // Load the replacement mesh.
+        chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(mesh_data)));
+
+        // Point the scene object at the new mesh.
+        chunk.object->mesh = chunk.mesh.get();
+
+        scene.add_object_to_scene(chunk.object.get());
+
+        chunk.dirty = false;
     }
+
+    // All new meshes have now been loaded.
+    // Now the old Mesh objects can safely be destroyed.
+    renderer.destroy_meshes(old_meshes);
 
 
     // Frustum culling
