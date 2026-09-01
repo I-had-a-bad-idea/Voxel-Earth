@@ -1,6 +1,6 @@
 #include "chunk.h"
 
-#include <functional>
+#include <algorithm>
 #include <stdlib.h>     //for using the function sleep
 
 Chunk::Chunk() 
@@ -176,8 +176,8 @@ Chunk::Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise,
 
 MeshData Chunk::generate_mesh_data() {
     MeshData mesh_data;
-    mesh_data.vertices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y * 4);
-    mesh_data.indices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y * 6);
+    mesh_data.vertices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 24);
+    mesh_data.indices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 36);
 
     auto is_solid = [&](int x, int y, int z) -> bool {
         if (x < 0 || x >= CHUNK_SIZE_X ||
@@ -219,34 +219,33 @@ MeshData Chunk::generate_mesh_data() {
         mesh_data.indices.push_back(start_index + 0);
     };
 
-    auto greedy_merge = [&](int width,
-                            int height,
-                            const std::function<AtlasTile(int, int)>& get_cell,
-                            const std::function<void(int, int, int, int, AtlasTile)>& emit_rect) {
-        const AtlasTile invalid_tile { UINT32_MAX, UINT32_MAX };
-        std::vector<std::vector<AtlasTile>> mask(height, std::vector<AtlasTile>(width, invalid_tile));
+    const AtlasTile invalid_tile { UINT32_MAX, UINT32_MAX };
+    std::vector<AtlasTile> mask(CHUNK_SIZE_X * CHUNK_SIZE_Y, invalid_tile);
+
+    auto greedy_merge = [&](int width, int height, auto&& get_cell, auto&& emit_rect) {
+        std::fill(mask.begin(), mask.begin() + width * height, invalid_tile);
 
         for (int v = 0; v < height; ++v) {
             for (int u = 0; u < width; ++u) {
-                mask[v][u] = get_cell(u, v);
+                mask[v * width + u] = get_cell(u, v);
             }
         }
 
-        std::vector<std::vector<bool>> visited(height, std::vector<bool>(width, false));
-
         for (int v = 0; v < height; ++v) {
             for (int u = 0; u < width; ++u) {
-                if (visited[v][u] || mask[v][u].x == UINT32_MAX) {
+                AtlasTile& first_tile = mask[v * width + u];
+                if (first_tile.x == UINT32_MAX) {
                     continue;
                 }
 
-                AtlasTile tile = mask[v][u];
+                AtlasTile tile = first_tile;
                 int u0 = u;
                 int u1 = u;
 
                 while (u1 + 1 < width) {
                     const int next_index = u1 + 1;
-                    if (visited[v][next_index] || mask[v][next_index].x == UINT32_MAX || !same_tile(mask[v][next_index], tile)) {
+                    AtlasTile& next_tile = mask[v * width + next_index];
+                    if (next_tile.x == UINT32_MAX || !same_tile(next_tile, tile)) {
                         break;
                     }
                     u1 = next_index;
@@ -256,7 +255,8 @@ MeshData Chunk::generate_mesh_data() {
                 while (v1 + 1 < height) {
                     bool row_matches = true;
                     for (int uu = u0; uu <= u1; ++uu) {
-                        if (visited[v1 + 1][uu] || mask[v1 + 1][uu].x == UINT32_MAX || !same_tile(mask[v1 + 1][uu], tile)) {
+                        AtlasTile& row_tile = mask[(v1 + 1) * width + uu];
+                        if (row_tile.x == UINT32_MAX || !same_tile(row_tile, tile)) {
                             row_matches = false;
                             break;
                         }
@@ -270,7 +270,7 @@ MeshData Chunk::generate_mesh_data() {
 
                 for (int yy = v; yy <= v1; ++yy) {
                     for (int xx = u0; xx <= u1; ++xx) {
-                        visited[yy][xx] = true;
+                        mask[yy * width + xx] = invalid_tile;
                     }
                 }
 
