@@ -2,24 +2,24 @@ CXX = g++
 CC  = gcc
 
 ENET_DIR = external/enet
-VULKAN_GRAPHICS_LIB = external/VGL
+VoxelVGL = external/VoxelVGL
 
 CFLAGS = -isystem$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g
 CXXFLAGS = $(CFLAGS) -std=c++20
 
-VULKAN_GRAPHICS_LIB_INCLUDE = \
-	-isystem$(VULKAN_GRAPHICS_LIB)/include \
-	-isystem$(VULKAN_GRAPHICS_LIB)/include/ktx/include
+VoxelVGL_INCLUDE = \
+	-isystem$(VoxelVGL)/include \
+	-isystem$(VoxelVGL)/include/ktx/include
 
 CPPFLAGS = \
 	-I. \
-	$(VULKAN_GRAPHICS_LIB_INCLUDE)
+	$(VoxelVGL_INCLUDE)
 
 LIBS = \
 	-lws2_32 \
 	-lwinmm \
 	-L$(VULKAN_SDK)/Lib \
-	-Lexternal/VGL \
+	-Lexternal/VoxelVGL \
 	-lvulkan-1 \
 	-l:VGL.a \
 	-lSDL3 \
