@@ -4,9 +4,9 @@
 #include "Math/noise.h"
 #include "biomes.h"
 
-#define CHUNK_SIZE_X 50
-#define CHUNK_SIZE_Z 50
-#define CHUNK_SIZE_Y 100
+#define CHUNK_SIZE_X 64
+#define CHUNK_SIZE_Z 64
+#define CHUNK_SIZE_Y 128
 constexpr int SEA_LEVEL = CHUNK_SIZE_Y / 4;
 
 struct ChunkPos {
