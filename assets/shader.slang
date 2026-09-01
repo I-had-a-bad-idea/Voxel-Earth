@@ -92,7 +92,7 @@ float4 main(VSOutput input) {
     float2 localUV = frac(input.UV);
 
     float2 tileSize = 1.0 / float2(ATLAS_WIDTH, ATLAS_HEIGHT);
-    float2 tileOffset = float2(input.AtlasTile.x, (ATLAS_HEIGHT - 1) - input.AtlasTile.y);
+    float2 tileOffset = float2(input.AtlasTile.x, input.AtlasTile.y);
 
     float2 atlasUV = tileOffset * tileSize + localUV * tileSize;
 
