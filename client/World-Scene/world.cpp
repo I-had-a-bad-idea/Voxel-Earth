@@ -301,8 +301,8 @@ BlockType World::get_block(int x, int y, int z) {
 }
 
 void World::set_block(int x, int y, int z, BlockType block) {
-    if (y < 0) {
-        return; // dont place below world
+    if (y < 0 || y == CHUNK_SIZE_Y) {
+        return; // dont place below/above world 
     }
     const int chunk_x = static_cast<int>(std::floor(
         static_cast<float>(x) / CHUNK_SIZE_X
