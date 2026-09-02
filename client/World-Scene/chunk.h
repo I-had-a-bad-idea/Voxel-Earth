@@ -10,6 +10,13 @@
 #define CHUNK_SIZE_Y 64
 constexpr int SEA_LEVEL = CHUNK_SIZE_Y / 4;
 
+enum class ChunkLOD : char {
+    LOD0,
+    LOD1,
+    LOD2,
+    LOD3
+};
+
 struct TerrainColumn {
     int height;
     Biome biome;
@@ -49,8 +56,9 @@ class Chunk {
         std::unique_ptr<Object> object;
         std::unique_ptr<Mesh> mesh;
         bool dirty = true; // whether the chunk mesh needs to be updated
+        ChunkLOD lod = ChunkLOD::LOD0;
 
-        MeshData generate_mesh_data();
+        MeshData generate_mesh_data(ChunkLOD requested_lod = ChunkLOD::LOD0);
         inline BlockType get_block(int x, int y, int z) {
             return blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)];
         }
