@@ -18,8 +18,8 @@
 #include "block.h"
 #include "chunk.h"
 
-constexpr int RENDER_DISTANCE = 40;
-constexpr int VERTICAL_RENDER_DISTANCE = 5;
+constexpr int RENDER_DISTANCE = 10;
+constexpr int VERTICAL_RENDER_DISTANCE = 2;
 
 class World {
     struct ColumnPos {
