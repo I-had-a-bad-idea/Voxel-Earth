@@ -85,11 +85,16 @@ void World::generate_chunks() {
             pos.y,
             pos.z
         );
-        MeshData mesh_data = chunk->generate_mesh_data(); // create mesh data
+        const ChunkLOD lod = lod_for_chunk_distance(
+            pos.x - generation_camera_chunk_x.load(std::memory_order_relaxed),
+            pos.y - generation_camera_chunk_y.load(std::memory_order_relaxed),
+            pos.z - generation_camera_chunk_z.load(std::memory_order_relaxed)
+        );
+        MeshData mesh_data = chunk->generate_mesh_data(lod);
 
         {
             std::lock_guard lock(generation_mutex);
-            completed_chunks.push({pos, std::move(chunk), std::move(mesh_data)}); // submit as completed
+            completed_chunks.push({pos, std::move(chunk), lod, std::move(mesh_data)}); // submit as completed
         }
     }
 }
@@ -258,10 +263,10 @@ void World::process_completed_chunks() { // on main thread
             generated.pos.y - static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y)),
             generated.pos.z - static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z))
         );
-        if (desired_lod != ChunkLOD::LOD0) {
+        chunk.lod = desired_lod;
+        if (generated.lod != desired_lod) {
             generated.mesh_data = chunk.generate_mesh_data(desired_lod);
         }
-        chunk.lod = desired_lod;
         bool empty_chunk = generated.mesh_data.vertices.empty() || generated.mesh_data.indices.empty();
         if (empty_chunk) {
             chunk.dirty = false;
@@ -298,37 +303,58 @@ void World::update_chunks() {
     int camera_chunk_y = static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
 
+    generation_camera_chunk_x.store(camera_chunk_x, std::memory_order_relaxed);
+    generation_camera_chunk_y.store(camera_chunk_y, std::memory_order_relaxed);
+    generation_camera_chunk_z.store(camera_chunk_z, std::memory_order_relaxed);
 
-    ChunkPos current_chunk_pos{camera_chunk_x, camera_chunk_y, camera_chunk_z};
+    queue_chunk_generation({camera_chunk_x, 0, camera_chunk_z});
+    for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
+         y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE;
+         ++y) {
+        if (y < 0) {
+            queue_chunk_generation({camera_chunk_x, y, camera_chunk_z});
+        }
+    }
 
-    // Queue the current chunk first
-    queue_chunk_generation(current_chunk_pos);
-
-    // Generate outward in expanding rings
     for (int step = 1; step <= RENDER_DISTANCE; ++step) {
         int min_x = camera_chunk_x - step;
         int max_x = camera_chunk_x + step;
         int min_z = camera_chunk_z - step;
         int max_z = camera_chunk_z + step;
 
+        auto queue_vertical_range = [&](int x, int z) {
+            const int dx = x - camera_chunk_x;
+            const int dz = z - camera_chunk_z;
+            if (dx * dx + dz * dz > RENDER_DISTANCE * RENDER_DISTANCE) {
+                return;
+            }
+
+            queue_chunk_generation({x, 0, z});
+            if (step > UNDERGROUND_STREAM_DISTANCE) {
+                return;
+            }
+
+            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
+                 y < 0 && y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE;
+                 ++y) {
+                queue_chunk_generation({x, y, z});
+            }
+        };
+
         // Bottom row
         for (int x = min_x; x <= max_x; ++x) {
-            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y)
-                queue_chunk_generation(ChunkPos{x, y, min_z});
+            queue_vertical_range(x, min_z);
         }
 
         // Top row
         for (int x = min_x; x <= max_x; ++x) {
-            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y)
-                queue_chunk_generation(ChunkPos{x, y, max_z});
+            queue_vertical_range(x, max_z);
         }
 
         // Left and right columns, excluding corners
         for (int z = min_z + 1; z < max_z; ++z) {
-            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
-                queue_chunk_generation(ChunkPos{min_x, y, z});
-                queue_chunk_generation(ChunkPos{max_x, y, z});
-            }
+            queue_vertical_range(min_x, z);
+            queue_vertical_range(max_x, z);
         }
     }
 
@@ -341,7 +367,13 @@ void World::update_chunks() {
         int dx = pos.x - camera_chunk_x;
         int dy = pos.y - camera_chunk_y;
         int dz = pos.z - camera_chunk_z;
-        if (std::abs(dx) > RENDER_DISTANCE || std::abs(dy) > VERTICAL_RENDER_DISTANCE || std::abs(dz) > RENDER_DISTANCE) {
+        const bool underground_too_far = pos.y < 0 &&
+            (std::abs(dx) > UNDERGROUND_STREAM_DISTANCE ||
+             std::abs(dz) > UNDERGROUND_STREAM_DISTANCE);
+        if (std::abs(dx) > RENDER_DISTANCE ||
+            std::abs(dy) > VERTICAL_RENDER_DISTANCE ||
+            std::abs(dz) > RENDER_DISTANCE ||
+            underground_too_far) {
             chunks_to_remove.push_back(pos);
         }
     }

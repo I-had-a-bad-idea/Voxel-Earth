@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <condition_variable>
+#include <atomic>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -18,8 +19,9 @@
 #include "block.h"
 #include "chunk.h"
 
-constexpr int RENDER_DISTANCE = 10;
-constexpr int VERTICAL_RENDER_DISTANCE = 2;
+constexpr int RENDER_DISTANCE = 20;
+constexpr int VERTICAL_RENDER_DISTANCE = 20;
+constexpr int UNDERGROUND_STREAM_DISTANCE = 8;
 
 class World {
     struct ColumnPos {
@@ -40,6 +42,7 @@ class World {
     struct GeneratedChunk {
         ChunkPos pos;
         std::unique_ptr<Chunk> chunk;
+        ChunkLOD lod;
         MeshData mesh_data;
     };
 
@@ -79,6 +82,9 @@ class World {
     std::queue<ChunkPos> generation_queue;
     std::queue<GeneratedChunk> completed_chunks;
     std::unordered_set<ChunkPos, ChunkPosHash> requested_chunks;
+    std::atomic<int> generation_camera_chunk_x {0};
+    std::atomic<int> generation_camera_chunk_y {0};
+    std::atomic<int> generation_camera_chunk_z {0};
     std::thread generation_thread;
     bool stop_generation {false};
 
