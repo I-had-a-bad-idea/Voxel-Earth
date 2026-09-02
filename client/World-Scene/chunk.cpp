@@ -82,22 +82,48 @@ MeshData Chunk::generate_mesh_data() {
         return lhs.x == rhs.x && lhs.y == rhs.y;
     };
 
-    auto add_face_quad = [&](const glm::vec3& v0,
-                             const glm::vec3& v1,
-                             const glm::vec3& v2,
-                             const glm::vec3& v3,
-                             const glm::vec3& normal,
+    auto add_face_quad = [&](const glm::uvec3& v0,
+                             const glm::uvec3& v1,
+                             const glm::uvec3& v2,
+                             const glm::uvec3& v3,
+                             PackedNormal normal,
                              AtlasTile tile,
-                             const glm::vec2& uv0,
-                             const glm::vec2& uv1,
-                             const glm::vec2& uv2,
-                             const glm::vec2& uv3) {
+                             const glm::uvec2& uv0,
+                             const glm::uvec2& uv1,
+                             const glm::uvec2& uv2,
+                             const glm::uvec2& uv3) {
         uint32_t start_index = static_cast<uint32_t>(mesh_data.vertices.size());
+        
+        const uint32_t packed_normal = static_cast<uint32_t>(normal);
+        const uint32_t packed_tile = pack_atlas_tile(tile.x, tile.y);
 
-        mesh_data.vertices.push_back({ v0, normal, uv0, { tile.x, tile.y } });
-        mesh_data.vertices.push_back({ v1, normal, uv1, { tile.x, tile.y } });
-        mesh_data.vertices.push_back({ v2, normal, uv2, { tile.x, tile.y } });
-        mesh_data.vertices.push_back({ v3, normal, uv3, { tile.x, tile.y } });
+        mesh_data.vertices.push_back({
+            pack_pos(v0.x, v0.y, v0.z),
+            packed_normal,
+            pack_uv(uv0.x, uv0.y),
+            packed_tile
+        });
+
+        mesh_data.vertices.push_back({
+            pack_pos(v1.x, v1.y, v1.z),
+            packed_normal,
+            pack_uv(uv1.x, uv1.y),
+            packed_tile
+        });
+
+        mesh_data.vertices.push_back({
+            pack_pos(v2.x, v2.y, v2.z),
+            packed_normal,
+            pack_uv(uv2.x, uv2.y),
+            packed_tile
+        });
+
+        mesh_data.vertices.push_back({
+            pack_pos(v3.x, v3.y, v3.z),
+            packed_normal,
+            pack_uv(uv3.x, uv3.y),
+            packed_tile
+        });
 
         mesh_data.indices.push_back(start_index + 0);
         mesh_data.indices.push_back(start_index + 1);
@@ -169,16 +195,16 @@ MeshData Chunk::generate_mesh_data() {
     };
 
     auto emit_x_face = [&](int x, bool positive_x, int min_v, int max_v, int min_u, int max_u, AtlasTile tile) {
-        const float x_coord = static_cast<float>(positive_x ? x + 1 : x);
-        const float v0 = static_cast<float>(min_v);
-        const float v1 = static_cast<float>(max_v + 1);
-        const float u0 = static_cast<float>(min_u);
-        const float u1 = static_cast<float>(max_u + 1);
+        const uint32_t x_coord = static_cast<uint32_t>(positive_x ? x + 1 : x);
+        const uint32_t v0 = static_cast<uint32_t>(min_v);
+        const uint32_t v1 = static_cast<uint32_t>(max_v + 1);
+        const uint32_t u0 = static_cast<uint32_t>(min_u);
+        const uint32_t u1 = static_cast<uint32_t>(max_u + 1);
 
-        const glm::vec2 uv0_0 = { static_cast<float>(min_u), static_cast<float>(min_v) };
-        const glm::vec2 uv1_0 = { static_cast<float>(max_u + 1), static_cast<float>(min_v) };
-        const glm::vec2 uv2_0 = { static_cast<float>(max_u + 1), static_cast<float>(max_v + 1) };
-        const glm::vec2 uv3_0 = { static_cast<float>(min_u), static_cast<float>(max_v + 1) };
+        const glm::uvec2 uv0 = { u0, static_cast<uint32_t>(min_v) };
+        const glm::uvec2 uv1 = { u1, static_cast<uint32_t>(min_v) };
+        const glm::uvec2 uv2 = { u1, v1 };
+        const glm::uvec2 uv3 = { u0, v1 };
 
         if (positive_x) {
             add_face_quad(
@@ -186,12 +212,9 @@ MeshData Chunk::generate_mesh_data() {
                 { x_coord, v0, u1 },
                 { x_coord, v1, u1 },
                 { x_coord, v1, u0 },
-                { 1.0f, 0.0f, 0.0f },
+                PackedNormal::PosX,
                 tile,
-                uv0_0,
-                uv1_0,
-                uv2_0,
-                uv3_0
+                uv0, uv1, uv2, uv3
             );
         } else {
             add_face_quad(
@@ -199,27 +222,24 @@ MeshData Chunk::generate_mesh_data() {
                 { x_coord, v0, u0 },
                 { x_coord, v1, u0 },
                 { x_coord, v1, u1 },
-                { -1.0f, 0.0f, 0.0f },
+                PackedNormal::NegX,
                 tile,
-                uv1_0,
-                uv0_0,
-                uv3_0,
-                uv2_0
+                uv1, uv0, uv3, uv2
             );
         }
     };
 
     auto emit_y_face = [&](int y, bool positive_y, int min_u, int max_u, int min_v, int max_v, AtlasTile tile) {
-        const float y_coord = static_cast<float>(positive_y ? y + 1 : y);
-        const float u0 = static_cast<float>(min_u);
-        const float u1 = static_cast<float>(max_u + 1);
-        const float v0 = static_cast<float>(min_v);
-        const float v1 = static_cast<float>(max_v + 1);
+        const uint32_t y_coord = static_cast<uint32_t>(positive_y ? y + 1 : y);
+        const uint32_t u0 = static_cast<uint32_t>(min_u);
+        const uint32_t u1 = static_cast<uint32_t>(max_u + 1);
+        const uint32_t v0 = static_cast<uint32_t>(min_v);
+        const uint32_t v1 = static_cast<uint32_t>(max_v + 1);
 
-        const glm::vec2 uv0_0 = { static_cast<float>(min_u), static_cast<float>(min_v) };
-        const glm::vec2 uv1_0 = { static_cast<float>(max_u + 1), static_cast<float>(min_v) };
-        const glm::vec2 uv2_0 = { static_cast<float>(max_u + 1), static_cast<float>(max_v + 1) };
-        const glm::vec2 uv3_0 = { static_cast<float>(min_u), static_cast<float>(max_v + 1) };
+        const glm::uvec2 uv0 = { u0, v0 };
+        const glm::uvec2 uv1 = { u1, v0 };
+        const glm::uvec2 uv2 = { u1, v1 };
+        const glm::uvec2 uv3 = { u0, v1 };
 
         if (positive_y) {
             add_face_quad(
@@ -227,12 +247,9 @@ MeshData Chunk::generate_mesh_data() {
                 { u0, y_coord, v1 },
                 { u1, y_coord, v1 },
                 { u1, y_coord, v0 },
-                { 0.0f, 1.0f, 0.0f },
+                PackedNormal::PosY,
                 tile,
-                uv0_0,
-                uv3_0,
-                uv2_0,
-                uv1_0
+                uv0, uv3, uv2, uv1
             );
         } else {
             add_face_quad(
@@ -240,27 +257,24 @@ MeshData Chunk::generate_mesh_data() {
                 { u1, y_coord, v0 },
                 { u1, y_coord, v1 },
                 { u0, y_coord, v1 },
-                { 0.0f, -1.0f, 0.0f },
+                PackedNormal::NegY,
                 tile,
-                uv0_0,
-                uv1_0,
-                uv2_0,
-                uv3_0
+                uv0, uv1, uv2, uv3
             );
         }
     };
 
     auto emit_z_face = [&](int z, bool positive_z, int min_u, int max_u, int min_v, int max_v, AtlasTile tile) {
-        const float z_coord = static_cast<float>(positive_z ? z + 1 : z);
-        const float u0 = static_cast<float>(min_u);
-        const float u1 = static_cast<float>(max_u + 1);
-        const float v0 = static_cast<float>(min_v);
-        const float v1 = static_cast<float>(max_v + 1);
+        const uint32_t z_coord = static_cast<uint32_t>(positive_z ? z + 1 : z);
+        const uint32_t u0 = static_cast<uint32_t>(min_u);
+        const uint32_t u1 = static_cast<uint32_t>(max_u + 1);
+        const uint32_t v0 = static_cast<uint32_t>(min_v);
+        const uint32_t v1 = static_cast<uint32_t>(max_v + 1);
 
-        const glm::vec2 uv0_0 = { static_cast<float>(min_u), static_cast<float>(min_v) };
-        const glm::vec2 uv1_0 = { static_cast<float>(max_u + 1), static_cast<float>(min_v) };
-        const glm::vec2 uv2_0 = { static_cast<float>(max_u + 1), static_cast<float>(max_v + 1) };
-        const glm::vec2 uv3_0 = { static_cast<float>(min_u), static_cast<float>(max_v + 1) };
+        const glm::uvec2 uv0 = { u0, v0 };
+        const glm::uvec2 uv1 = { u1, v0 };
+        const glm::uvec2 uv2 = { u1, v1 };
+        const glm::uvec2 uv3 = { u0, v1 };
 
         if (positive_z) {
             add_face_quad(
@@ -268,12 +282,9 @@ MeshData Chunk::generate_mesh_data() {
                 { u1, v0, z_coord },
                 { u1, v1, z_coord },
                 { u0, v1, z_coord },
-                { 0.0f, 0.0f, 1.0f },
+                PackedNormal::PosZ,
                 tile,
-                uv0_0,
-                uv1_0,
-                uv2_0,
-                uv3_0
+                uv0, uv1, uv2, uv3
             );
         } else {
             add_face_quad(
@@ -281,12 +292,9 @@ MeshData Chunk::generate_mesh_data() {
                 { u0, v0, z_coord },
                 { u0, v1, z_coord },
                 { u1, v1, z_coord },
-                { 0.0f, 0.0f, -1.0f },
+                PackedNormal::NegZ,
                 tile,
-                uv1_0,
-                uv0_0,
-                uv3_0,
-                uv2_0
+                uv1, uv0, uv3, uv2
             );
         }
     };
