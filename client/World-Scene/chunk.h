@@ -6,33 +6,43 @@
 
 #define CHUNK_SIZE_X 64
 #define CHUNK_SIZE_Z 64
-#define CHUNK_SIZE_Y 128
+#define CHUNK_SIZE_Y 64
 constexpr int SEA_LEVEL = CHUNK_SIZE_Y / 4;
+
+struct TerrainColumn {
+    int height;
+    Biome biome;
+    BlockType surface;
+};
 
 struct ChunkPos {
     int x;
+    int y;
     int z;
 
     bool operator==(const ChunkPos& other) const {
-        return x == other.x && z == other.z;
+        return x == other.x && y == other.y && z == other.z;
     }
 };
 
 struct ChunkPosHash {
     std::size_t operator()(const ChunkPos& pos) const {
-        return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.z) << 1);
+        return std::hash<int>()(pos.x) ^
+               (std::hash<int>()(pos.y) << 1) ^
+               (std::hash<int>()(pos.z) << 2);
     }
 };
 
 class Chunk {
     int chunk_x;
+    int chunk_y;
     int chunk_z;
     std::vector<BlockType> blocks;
     std::vector<uint8_t> column_tops;
     // the highest block in each collum (used to be mroe efficient when doing stuff (e.g. generating mesh))
 
     public:
-        Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x, int chunk_z);
+        Chunk(const std::vector<TerrainColumn>& terrain_columns, int chunk_x, int chunk_y, int chunk_z);
         Chunk();
 
         std::unique_ptr<Object> object;
