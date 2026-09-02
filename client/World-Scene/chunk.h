@@ -2,6 +2,7 @@
 
 #include "block.h"
 #include "Math/noise.h"
+#include "Math/packing.hpp"
 #include "biomes.h"
 
 #define CHUNK_SIZE_X 64

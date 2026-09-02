@@ -4,7 +4,7 @@
 
 #include <VGL/object.h>
 
-enum class BlockType {
+enum class BlockType : char {
     Air,
     Stone,
     Dirt,
