@@ -17,7 +17,8 @@
 #include "block.h"
 #include "chunk.h"
 
-constexpr int RENDER_DISTANCE = 15;
+constexpr int RENDER_DISTANCE = 10;
+constexpr int VERTICAL_RENDER_DISTANCE = 5;
 
 class World {
     struct GeneratedChunk {

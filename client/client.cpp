@@ -87,17 +87,16 @@ BlockHit get_block_looked_at(World& world, const glm::vec3& look_direction) {
     return {glm::vec3(-1.0f), glm::vec3(-1.0f), false}; // No block found
 }
 
-int main(void)
-{
+int main(void) {
     // Define window size
     int width = 960;
     int height = 540;
 
     // Create renderer
-    Renderer renderer("Voxel Engine", width, height, true, nullptr, 0);
+    Renderer renderer("Voxel Engine", width, height, true, nullptr, false, 0);
 
     std::cout << "Creating world...\n";
-    // Create scene
+    // Create world
     World world(renderer);
     world.setup();
     Scene& scene = world.get_scene();

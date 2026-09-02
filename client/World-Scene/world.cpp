@@ -46,6 +46,7 @@ void World::generate_chunks() {
             temperature,
             moisture,
             pos.x,
+            pos.y,
             pos.z
         );
         MeshData mesh_data = chunk->generate_mesh_data(); // create mesh data
@@ -103,15 +104,25 @@ void World::process_completed_chunks() { // on main thread
 
         // create mesh and object
         Chunk& chunk = it->second;
+        bool empty_chunk = generated.mesh_data.vertices.empty() || generated.mesh_data.indices.empty();
+        if (empty_chunk) {
+            chunk.dirty = false;
+            continue;
+        }
+
+
         chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(generated.mesh_data)));
+
         chunk.dirty = false;
         chunk.object = std::make_unique<Object>(
             chunk.mesh.get(),
             atlas_material.get(),
-            glm::vec3(generated.pos.x * CHUNK_SIZE_X, 0.0f, generated.pos.z * CHUNK_SIZE_Z),
+            glm::vec3(generated.pos.x * CHUNK_SIZE_X, generated.pos.y * CHUNK_SIZE_Y, generated.pos.z * CHUNK_SIZE_Z),
             glm::vec3(0.0f, 0.0f, 0.0f)
         );
-        scene.add_object_to_scene(chunk.object.get()); // add to world
+        if (!empty_chunk) {
+            scene.add_object_to_scene(chunk.object.get()); // add to world
+        }
         ++uploaded_chunks;
     }
 }
@@ -126,10 +137,11 @@ void World::update_chunks() {
     ));
 
     int camera_chunk_x = static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X));
+    int camera_chunk_y = static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
 
 
-    ChunkPos current_chunk_pos{camera_chunk_x, camera_chunk_z};
+    ChunkPos current_chunk_pos{camera_chunk_x, camera_chunk_y, camera_chunk_z};
 
     // Queue the current chunk first
     queue_chunk_generation(current_chunk_pos);
@@ -143,18 +155,22 @@ void World::update_chunks() {
 
         // Bottom row
         for (int x = min_x; x <= max_x; ++x) {
-            queue_chunk_generation(ChunkPos{x, min_z});
+            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y)
+                queue_chunk_generation(ChunkPos{x, y, min_z});
         }
 
         // Top row
         for (int x = min_x; x <= max_x; ++x) {
-            queue_chunk_generation(ChunkPos{x, max_z});
+            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y)
+                queue_chunk_generation(ChunkPos{x, y, max_z});
         }
 
         // Left and right columns, excluding corners
         for (int z = min_z + 1; z < max_z; ++z) {
-            queue_chunk_generation(ChunkPos{min_x, z});
-            queue_chunk_generation(ChunkPos{max_x, z});
+            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
+                queue_chunk_generation(ChunkPos{min_x, y, z});
+                queue_chunk_generation(ChunkPos{max_x, y, z});
+            }
         }
     }
 
@@ -165,15 +181,20 @@ void World::update_chunks() {
     std::vector<ChunkPos> chunks_to_remove;
     for (const auto& [pos, chunk] : chunks) {
         int dx = pos.x - camera_chunk_x;
+        int dy = pos.y - camera_chunk_y;
         int dz = pos.z - camera_chunk_z;
-        if (std::abs(dx) > RENDER_DISTANCE || std::abs(dz) > RENDER_DISTANCE) {
+        if (std::abs(dx) > RENDER_DISTANCE || std::abs(dy) > VERTICAL_RENDER_DISTANCE || std::abs(dz) > RENDER_DISTANCE) {
             chunks_to_remove.push_back(pos);
         }
     }
     for (const ChunkPos& pos : chunks_to_remove) {
         const Chunk& chunk = chunks.at(pos);
-        scene.remove_object_from_scene(chunk.object.get());
-        renderer.destroy_mesh(*chunk.mesh);
+        if (chunk.object) {
+            scene.remove_object_from_scene(chunk.object.get());
+        }
+        if (chunk.mesh) {
+            renderer.destroy_mesh(*chunk.mesh);
+        }
         chunks.erase(pos);
     }
 
@@ -187,22 +208,43 @@ void World::update_chunks() {
 
         // Generate CPU-side mesh data.
         MeshData mesh_data = chunk.generate_mesh_data();
+        bool empty_chunk = mesh_data.vertices.empty() || mesh_data.indices.empty();
 
         // Remove the old object from the scene before replacing its mesh.
-        scene.remove_object_from_scene(chunk.object.get());
+        if (chunk.object) {
+            scene.remove_object_from_scene(chunk.object.get());
+        }
 
         // Move the actual Mesh object out of the unique_ptr.
-        old_meshes.push_back(std::move(*chunk.mesh));
-        chunk.mesh.reset();
+        if (chunk.mesh) {
+            old_meshes.push_back(std::move(*chunk.mesh));
+            chunk.mesh.reset();
+        }
+
+        if (empty_chunk) {
+            // If the new mesh is empty, we don't need to create a new Mesh object.
+            chunk.object->mesh = nullptr;
+            chunk.dirty = false;
+            continue;
+        }
 
         // Load the replacement mesh.
         chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(mesh_data)));
 
         // Point the scene object at the new mesh.
-        chunk.object->mesh = chunk.mesh.get();
+        if (!chunk.object) {
+            chunk.object = std::make_unique<Object>(
+                chunk.mesh.get(),
+                atlas_material.get(),
+                glm::vec3(pos.x * CHUNK_SIZE_X, pos.y * CHUNK_SIZE_Y, pos.z * CHUNK_SIZE_Z),
+                glm::vec3(0.0f, 0.0f, 0.0f)
+            );
+        } else {
+            chunk.object->mesh = chunk.mesh.get();
+        }
 
+        
         scene.add_object_to_scene(chunk.object.get());
-
         chunk.dirty = false;
     }
 
@@ -221,7 +263,11 @@ void World::update_chunks() {
     const float chunk_radius = std::sqrt(half_x * half_x + half_y * half_y + half_z * half_z);
 
     for (const auto& [pos, chunk] : chunks) {
-        glm::vec3 chunk_center((pos.x + 0.5f) * CHUNK_SIZE_X, CHUNK_SIZE_Y * 0.5f, (pos.z + 0.5f) * CHUNK_SIZE_Z);
+        if (!chunk.object) {
+            continue;
+        }
+
+        glm::vec3 chunk_center((pos.x + 0.5f) * CHUNK_SIZE_X, (pos.y + 0.5f) * CHUNK_SIZE_Y, (pos.z + 0.5f) * CHUNK_SIZE_Z);
 
         glm::vec3 to_chunk = chunk_center - scene.cam_pos;
         float distance = glm::length(to_chunk);
@@ -280,44 +326,43 @@ Scene& World::get_scene() {
 }
 
 BlockType World::get_block(int x, int y, int z) {
-    if (y >= CHUNK_SIZE_Y || y < 0) {
-        return BlockType::Air; // everything above/below chunk is air
-    }
-
     const int chunk_x = static_cast<int>(std::floor(static_cast<float>(x) / CHUNK_SIZE_X));
+    const int chunk_y = static_cast<int>(std::floor(static_cast<float>(y) / CHUNK_SIZE_Y));
     const int chunk_z = static_cast<int>(std::floor(static_cast<float>(z) / CHUNK_SIZE_Z));
 
     const int block_x = x - chunk_x * CHUNK_SIZE_X;
+    const int block_y = y - chunk_y * CHUNK_SIZE_Y;
     const int block_z = z - chunk_z * CHUNK_SIZE_Z;
 
-    const ChunkPos pos {chunk_x, chunk_z};
+    const ChunkPos pos {chunk_x, chunk_y, chunk_z};
 
     // Due to multithreading chunk may not exist yet, so we return air if it doesn't exist
     if (!chunks.contains(pos)) {
         return BlockType::Air;
     }
     Chunk& chunk = chunks.at(pos);
-    return chunk.get_block(block_x, y, block_z);
+    return chunk.get_block(block_x, block_y, block_z);
 }
 
 void World::set_block(int x, int y, int z, BlockType block) {
-    if (y < 0 || y == CHUNK_SIZE_Y) {
-        return; // dont place below/above world 
-    }
     const int chunk_x = static_cast<int>(std::floor(
         static_cast<float>(x) / CHUNK_SIZE_X
+    ));
+    const int chunk_y = static_cast<int>(std::floor(
+        static_cast<float>(y) / CHUNK_SIZE_Y
     ));
     const int chunk_z = static_cast<int>(std::floor(
         static_cast<float>(z) / CHUNK_SIZE_Z
     ));
 
     const int block_x = x - chunk_x * CHUNK_SIZE_X;
+    const int block_y = y - chunk_y * CHUNK_SIZE_Y;
     const int block_z = z - chunk_z * CHUNK_SIZE_Z;
 
-    const ChunkPos pos {chunk_x, chunk_z};
+    const ChunkPos pos {chunk_x, chunk_y, chunk_z};
 
     Chunk& chunk = chunks.at(pos);
-    chunk.set_block(block_x, y, block_z, block);
+    chunk.set_block(block_x, block_y, block_z, block);
 
     auto mark_neighbor_dirty = [this](ChunkPos neighbor_pos) {
         if (auto neighbor = chunks.find(neighbor_pos); neighbor != chunks.end()) {
@@ -326,15 +371,21 @@ void World::set_block(int x, int y, int z, BlockType block) {
     };
 
     if (block_x == 0) {
-        mark_neighbor_dirty({chunk_x - 1, chunk_z});
+        mark_neighbor_dirty({chunk_x - 1, chunk_y, chunk_z});
     }
     if (block_x == CHUNK_SIZE_X - 1) {
-        mark_neighbor_dirty({chunk_x + 1, chunk_z});
+        mark_neighbor_dirty({chunk_x + 1, chunk_y, chunk_z});
+    }
+    if (block_y == 0) {
+        mark_neighbor_dirty({chunk_x, chunk_y - 1, chunk_z});
+    }
+    if (block_y == CHUNK_SIZE_Y - 1) {
+        mark_neighbor_dirty({chunk_x, chunk_y + 1, chunk_z});
     }
     if (block_z == 0) {
-        mark_neighbor_dirty({chunk_x, chunk_z - 1});
+        mark_neighbor_dirty({chunk_x, chunk_y, chunk_z - 1});
     }
     if (block_z == CHUNK_SIZE_Z - 1) {
-        mark_neighbor_dirty({chunk_x, chunk_z + 1});
+        mark_neighbor_dirty({chunk_x, chunk_y, chunk_z + 1});
     }
 }
