@@ -85,11 +85,16 @@ void World::generate_chunks() {
             pos.y,
             pos.z
         );
-        MeshData mesh_data = chunk->generate_mesh_data(); // create mesh data
+        const ChunkLOD lod = lod_for_chunk_distance(
+            pos.x - generation_camera_chunk_x.load(std::memory_order_relaxed),
+            pos.y - generation_camera_chunk_y.load(std::memory_order_relaxed),
+            pos.z - generation_camera_chunk_z.load(std::memory_order_relaxed)
+        );
+        MeshData mesh_data = chunk->generate_mesh_data(lod);
 
         {
             std::lock_guard lock(generation_mutex);
-            completed_chunks.push({pos, std::move(chunk), std::move(mesh_data)}); // submit as completed
+            completed_chunks.push({pos, std::move(chunk), lod, std::move(mesh_data)}); // submit as completed
         }
     }
 }
@@ -258,10 +263,10 @@ void World::process_completed_chunks() { // on main thread
             generated.pos.y - static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y)),
             generated.pos.z - static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z))
         );
-        if (desired_lod != ChunkLOD::LOD0) {
+        chunk.lod = desired_lod;
+        if (generated.lod != desired_lod) {
             generated.mesh_data = chunk.generate_mesh_data(desired_lod);
         }
-        chunk.lod = desired_lod;
         bool empty_chunk = generated.mesh_data.vertices.empty() || generated.mesh_data.indices.empty();
         if (empty_chunk) {
             chunk.dirty = false;
@@ -298,6 +303,9 @@ void World::update_chunks() {
     int camera_chunk_y = static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
 
+    generation_camera_chunk_x.store(camera_chunk_x, std::memory_order_relaxed);
+    generation_camera_chunk_y.store(camera_chunk_y, std::memory_order_relaxed);
+    generation_camera_chunk_z.store(camera_chunk_z, std::memory_order_relaxed);
 
     ChunkPos current_chunk_pos{camera_chunk_x, camera_chunk_y, camera_chunk_z};
 
