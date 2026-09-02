@@ -4,7 +4,7 @@ CC  = gcc
 ENET_DIR = external/enet
 VoxelVGL = external/VoxelVGL
 
-CFLAGS = -isystem$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g
+CFLAGS = -isystem$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g -O3
 CXXFLAGS = $(CFLAGS) -std=c++20
 
 VoxelVGL_INCLUDE = \
