@@ -8,11 +8,12 @@ Chunk::Chunk()
             column_tops(CHUNK_SIZE_X * CHUNK_SIZE_Z, 0)
 {
     chunk_x = 0;
+    chunk_y = 0;
     chunk_z = 0;
 }
 Chunk::Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise,
-             Noise& temperature_noise, Noise& moisture_noise, int chunk_x_, int chunk_z_)
-    : chunk_x(chunk_x_), chunk_z(chunk_z_),
+             Noise& temperature_noise, Noise& moisture_noise, int chunk_x_, int chunk_y_, int chunk_z_)
+    : chunk_x(chunk_x_), chunk_y(chunk_y_), chunk_z(chunk_z_),
       blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
       column_tops(CHUNK_SIZE_X * CHUNK_SIZE_Z, 0)
 {
@@ -113,23 +114,6 @@ Chunk::Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise,
                 biome = Biome::Plains;
             }
 
-            // OCEAN
-            if (height < SEA_LEVEL) {
-                for (int y = 0; y <= height; y++) {
-                    if (y < height - 3)
-                        set_block(x, y, z, BlockType::Stone);
-                    else
-                        set_block(x, y, z, BlockType::Sand);
-                }
-
-                for (int y = height + 1; y <= SEA_LEVEL; y++) {
-                    set_block(x, y, z, BlockType::Water);
-                }
-
-                column_tops[x + CHUNK_SIZE_X * z] = SEA_LEVEL;
-                continue;
-            }
-
             // BEACH
             const bool beach = height <= SEA_LEVEL + 2;
 
@@ -149,27 +133,41 @@ Chunk::Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise,
                     surface = BlockType::Stone;
             }
 
-            // FILL TERRAIN
-            for (int y = 0; y < height; y++) {
-                BlockType type = BlockType::Stone;
+            const int world_y_base = chunk_y * CHUNK_SIZE_Y;
+            int local_top = -1;
 
-                if (y >= height - 3 && biome != Biome::Mountains)
-                    type = BlockType::Dirt;
+            for (int local_y = 0; local_y < CHUNK_SIZE_Y; ++local_y) {
+                const int world_y = world_y_base + local_y;
+                BlockType type = BlockType::Air;
 
-                set_block(x, y, z, type);
-            }
+                if (world_y <= height) {
+                    if (height < SEA_LEVEL) {
+                        type = world_y < height - 3 ? BlockType::Stone : BlockType::Sand;
+                    }
+                    else if (world_y == height) {
+                        type = surface;
+                    }
+                    else if (biome == Biome::Desert && world_y >= height - 5) {
+                        type = BlockType::Sand;
+                    }
+                    else if (world_y >= height - 3 && biome != Biome::Mountains) {
+                        type = BlockType::Dirt;
+                    }
+                    else {
+                        type = BlockType::Stone;
+                    }
+                }
+                else if (height < SEA_LEVEL && world_y <= SEA_LEVEL) {
+                    type = BlockType::Water;
+                }
 
-            // SURFACE BLOCK
-            set_block(x, height, z, surface);
-
-            // DESERT SAND
-            if (biome == Biome::Desert) {
-                for (int y = std::max(0, height - 5); y < height; y++) {
-                    set_block(x, y, z, BlockType::Sand);
+                if (type != BlockType::Air) {
+                    set_block(x, local_y, z, type);
+                    local_top = local_y;
                 }
             }
 
-            column_tops[x + CHUNK_SIZE_X * z] = height;
+            column_tops[x + CHUNK_SIZE_X * z] = static_cast<uint8_t>(std::max(0, local_top));
         }
     }
 }
