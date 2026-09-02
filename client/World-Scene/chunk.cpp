@@ -86,20 +86,15 @@ MeshData Chunk::generate_mesh_data(const std::vector<BlockType>& source_blocks,
             for (int z = 0; z < mesh_size_z; ++z) {
                 for (int x = 0; x < mesh_size_x; ++x) {
                     BlockType representative = BlockType::Air;
-                    for (int source_y = y * lod_scale;
-                         source_y < std::min((y + 1) * lod_scale, CHUNK_SIZE_Y);
-                         ++source_y) {
-                        for (int source_z = z * lod_scale;
-                             source_z < std::min((z + 1) * lod_scale, CHUNK_SIZE_Z);
-                             ++source_z) {
-                            for (int source_x = x * lod_scale;
-                                 source_x < std::min((x + 1) * lod_scale, CHUNK_SIZE_X);
-                                 ++source_x) {
-                                BlockType candidate = source_blocks[source_x + CHUNK_SIZE_X * (source_z + CHUNK_SIZE_Z * source_y)];
-                                if (candidate != BlockType::Air) {
-                                    representative = candidate;
-                                }
-                            }
+                    const int source_x = std::min(x * lod_scale + lod_scale / 2, CHUNK_SIZE_X - 1);
+                    const int source_z = std::min(z * lod_scale + lod_scale / 2, CHUNK_SIZE_Z - 1);
+                    for (int source_y = std::min((y + 1) * lod_scale - 1, CHUNK_SIZE_Y - 1);
+                         source_y >= y * lod_scale;
+                         --source_y) {
+                        BlockType candidate = source_blocks[source_x + CHUNK_SIZE_X * (source_z + CHUNK_SIZE_Z * source_y)];
+                        if (candidate != BlockType::Air) {
+                            representative = candidate;
+                            break;
                         }
                     }
                     mesh_blocks[x + mesh_size_x * (z + mesh_size_z * y)] = representative;
