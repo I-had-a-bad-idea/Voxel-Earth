@@ -1,5 +1,21 @@
 #include "World.h"
 
+namespace {
+ChunkLOD lod_for_chunk_distance(int dx, int dz) {
+    const int distance = std::max(std::abs(dx), std::abs(dz));
+    if (distance <= 2) {
+        return ChunkLOD::LOD0;
+    }
+    if (distance <= 4) {
+        return ChunkLOD::LOD1;
+    }
+    if (distance <= 7) {
+        return ChunkLOD::LOD2;
+    }
+    return ChunkLOD::LOD3;
+}
+}
+
 World::World(Renderer& renderer_)
     : renderer(renderer_),
       continental(1234, 0.0008f, 4, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
@@ -184,6 +200,14 @@ void World::process_completed_chunks() { // on main thread
 
         // create mesh and object
         Chunk& chunk = it->second;
+        const ChunkLOD desired_lod = lod_for_chunk_distance(
+            generated.pos.x - static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X)),
+            generated.pos.z - static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z))
+        );
+        if (desired_lod != ChunkLOD::LOD0) {
+            generated.mesh_data = chunk.generate_mesh_data(desired_lod);
+        }
+        chunk.lod = desired_lod;
         bool empty_chunk = generated.mesh_data.vertices.empty() || generated.mesh_data.indices.empty();
         if (empty_chunk) {
             chunk.dirty = false;
@@ -283,11 +307,19 @@ void World::update_chunks() {
     std::vector<Mesh> old_meshes;
 
     for (auto& [pos, chunk] : chunks) {
+        const ChunkLOD desired_lod = lod_for_chunk_distance(
+            pos.x - camera_chunk_x,
+            pos.z - camera_chunk_z
+        );
+        if (chunk.lod != desired_lod) {
+            chunk.lod = desired_lod;
+            chunk.dirty = true;
+        }
         if (!chunk.dirty)
             continue;
 
         // Generate CPU-side mesh data.
-        MeshData mesh_data = chunk.generate_mesh_data();
+        MeshData mesh_data = chunk.generate_mesh_data(chunk.lod);
         bool empty_chunk = mesh_data.vertices.empty() || mesh_data.indices.empty();
 
         // Remove the old object from the scene before replacing its mesh.
@@ -303,7 +335,9 @@ void World::update_chunks() {
 
         if (empty_chunk) {
             // If the new mesh is empty, we don't need to create a new Mesh object.
-            chunk.object->mesh = nullptr;
+            if (chunk.object) {
+                chunk.object->mesh = nullptr;
+            }
             chunk.dirty = false;
             continue;
         }
