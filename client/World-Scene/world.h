@@ -19,8 +19,9 @@
 #include "block.h"
 #include "chunk.h"
 
-constexpr int RENDER_DISTANCE = 10;
-constexpr int VERTICAL_RENDER_DISTANCE = 2;
+constexpr int RENDER_DISTANCE = 20;
+constexpr int VERTICAL_RENDER_DISTANCE = 20;
+constexpr int UNDERGROUND_STREAM_DISTANCE = 8;
 
 class World {
     struct ColumnPos {
