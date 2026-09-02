@@ -19,7 +19,7 @@
 #include "chunk.h"
 
 constexpr int RENDER_DISTANCE = 10;
-constexpr int VERTICAL_RENDER_DISTANCE = 5;
+constexpr int VERTICAL_RENDER_DISTANCE = 2;
 
 class World {
     struct ColumnPos {
@@ -40,6 +40,20 @@ class World {
     struct GeneratedChunk {
         ChunkPos pos;
         std::unique_ptr<Chunk> chunk;
+        MeshData mesh_data;
+    };
+
+    struct MeshUpdate {
+        ChunkPos pos;
+        ChunkLOD lod;
+        uint64_t revision;
+        std::vector<BlockType> blocks;
+    };
+
+    struct CompletedMeshUpdate {
+        ChunkPos pos;
+        ChunkLOD lod;
+        uint64_t revision;
         MeshData mesh_data;
     };
 
@@ -68,7 +82,16 @@ class World {
     std::thread generation_thread;
     bool stop_generation {false};
 
+    std::mutex mesh_update_mutex;
+    std::condition_variable mesh_update_condition;
+    std::queue<MeshUpdate> mesh_update_queue;
+    std::queue<CompletedMeshUpdate> completed_mesh_updates;
+    std::unordered_set<ChunkPos, ChunkPosHash> pending_mesh_updates;
+    std::thread mesh_update_thread;
+    bool stop_mesh_updates {false};
+
     void generate_chunks();
+    void update_chunk_meshes();
     TerrainColumn generate_terrain_column(int world_x, int world_z);
     std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
     void queue_chunk_generation(ChunkPos pos);

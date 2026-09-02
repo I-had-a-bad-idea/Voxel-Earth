@@ -63,19 +63,63 @@ Chunk::Chunk(const std::vector<TerrainColumn>& terrain_columns,
     }
 }
 
-MeshData Chunk::generate_mesh_data() {
+MeshData Chunk::generate_mesh_data(ChunkLOD requested_lod) {
+    return generate_mesh_data(blocks, requested_lod);
+}
+
+std::vector<BlockType> Chunk::copy_blocks() const {
+    return blocks;
+}
+
+MeshData Chunk::generate_mesh_data(const std::vector<BlockType>& source_blocks,
+                                   ChunkLOD requested_lod) {
+    const int lod_scale = 1 << static_cast<int>(requested_lod);
+    const int mesh_size_x = (CHUNK_SIZE_X + lod_scale - 1) / lod_scale;
+    const int mesh_size_y = (CHUNK_SIZE_Y + lod_scale - 1) / lod_scale;
+    const int mesh_size_z = (CHUNK_SIZE_Z + lod_scale - 1) / lod_scale;
+
+    std::vector<BlockType> mesh_blocks(mesh_size_x * mesh_size_z * mesh_size_y, BlockType::Air);
+    for (int y = 0; y < mesh_size_y; ++y) {
+        for (int z = 0; z < mesh_size_z; ++z) {
+            for (int x = 0; x < mesh_size_x; ++x) {
+                BlockType representative = BlockType::Air;
+                for (int source_y = y * lod_scale;
+                     source_y < std::min((y + 1) * lod_scale, CHUNK_SIZE_Y);
+                     ++source_y) {
+                    for (int source_z = z * lod_scale;
+                         source_z < std::min((z + 1) * lod_scale, CHUNK_SIZE_Z);
+                         ++source_z) {
+                        for (int source_x = x * lod_scale;
+                             source_x < std::min((x + 1) * lod_scale, CHUNK_SIZE_X);
+                             ++source_x) {
+                            BlockType candidate = source_blocks[source_x + CHUNK_SIZE_X * (source_z + CHUNK_SIZE_Z * source_y)];
+                            if (candidate != BlockType::Air) {
+                                representative = candidate;
+                            }
+                        }
+                    }
+                }
+                mesh_blocks[x + mesh_size_x * (z + mesh_size_z * y)] = representative;
+            }
+        }
+    }
+
     MeshData mesh_data;
-    mesh_data.vertices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 24);
-    mesh_data.indices.reserve(CHUNK_SIZE_X * CHUNK_SIZE_Z * 36);
+    mesh_data.vertices.reserve(mesh_size_x * mesh_size_z * 24);
+    mesh_data.indices.reserve(mesh_size_x * mesh_size_z * 36);
 
     auto is_solid = [&](int x, int y, int z) -> bool {
-        if (x < 0 || x >= CHUNK_SIZE_X ||
-            y < 0 || y >= CHUNK_SIZE_Y ||
-            z < 0 || z >= CHUNK_SIZE_Z) {
+        if (x < 0 || x >= mesh_size_x ||
+            y < 0 || y >= mesh_size_y ||
+            z < 0 || z >= mesh_size_z) {
             return false;
         }
 
-        return get_block(x, y, z) != BlockType::Air;
+        return mesh_blocks[x + mesh_size_x * (z + mesh_size_z * y)] != BlockType::Air;
+    };
+
+    auto get_mesh_block = [&](int x, int y, int z) -> BlockType {
+        return mesh_blocks[x + mesh_size_x * (z + mesh_size_z * y)];
     };
 
     auto same_tile = [](const AtlasTile& lhs, const AtlasTile& rhs) {
@@ -135,7 +179,9 @@ MeshData Chunk::generate_mesh_data() {
     };
 
     const AtlasTile invalid_tile { UINT32_MAX, UINT32_MAX };
-    std::vector<AtlasTile> mask(CHUNK_SIZE_X * CHUNK_SIZE_Y, invalid_tile);
+    std::vector<AtlasTile> mask(std::max({mesh_size_x, mesh_size_y, mesh_size_z}) *
+                                    std::max({mesh_size_x, mesh_size_y, mesh_size_z}),
+                                invalid_tile);
 
     auto greedy_merge = [&](int width, int height, auto&& get_cell, auto&& emit_rect) {
         std::fill(mask.begin(), mask.begin() + width * height, invalid_tile);
@@ -195,11 +241,11 @@ MeshData Chunk::generate_mesh_data() {
     };
 
     auto emit_x_face = [&](int x, bool positive_x, int min_v, int max_v, int min_u, int max_u, AtlasTile tile) {
-        const uint32_t x_coord = static_cast<uint32_t>(positive_x ? x + 1 : x);
-        const uint32_t v0 = static_cast<uint32_t>(min_v);
-        const uint32_t v1 = static_cast<uint32_t>(max_v + 1);
-        const uint32_t u0 = static_cast<uint32_t>(min_u);
-        const uint32_t u1 = static_cast<uint32_t>(max_u + 1);
+        const uint32_t x_coord = static_cast<uint32_t>((positive_x ? x + 1 : x) * lod_scale);
+        const uint32_t v0 = static_cast<uint32_t>(min_v * lod_scale);
+        const uint32_t v1 = static_cast<uint32_t>((max_v + 1) * lod_scale);
+        const uint32_t u0 = static_cast<uint32_t>(min_u * lod_scale);
+        const uint32_t u1 = static_cast<uint32_t>((max_u + 1) * lod_scale);
 
         const glm::uvec2 uv0 = { u0, static_cast<uint32_t>(min_v) };
         const glm::uvec2 uv1 = { u1, static_cast<uint32_t>(min_v) };
@@ -230,11 +276,11 @@ MeshData Chunk::generate_mesh_data() {
     };
 
     auto emit_y_face = [&](int y, bool positive_y, int min_u, int max_u, int min_v, int max_v, AtlasTile tile) {
-        const uint32_t y_coord = static_cast<uint32_t>(positive_y ? y + 1 : y);
-        const uint32_t u0 = static_cast<uint32_t>(min_u);
-        const uint32_t u1 = static_cast<uint32_t>(max_u + 1);
-        const uint32_t v0 = static_cast<uint32_t>(min_v);
-        const uint32_t v1 = static_cast<uint32_t>(max_v + 1);
+        const uint32_t y_coord = static_cast<uint32_t>((positive_y ? y + 1 : y) * lod_scale);
+        const uint32_t u0 = static_cast<uint32_t>(min_u * lod_scale);
+        const uint32_t u1 = static_cast<uint32_t>((max_u + 1) * lod_scale);
+        const uint32_t v0 = static_cast<uint32_t>(min_v * lod_scale);
+        const uint32_t v1 = static_cast<uint32_t>((max_v + 1) * lod_scale);
 
         const glm::uvec2 uv0 = { u0, v0 };
         const glm::uvec2 uv1 = { u1, v0 };
@@ -265,11 +311,11 @@ MeshData Chunk::generate_mesh_data() {
     };
 
     auto emit_z_face = [&](int z, bool positive_z, int min_u, int max_u, int min_v, int max_v, AtlasTile tile) {
-        const uint32_t z_coord = static_cast<uint32_t>(positive_z ? z + 1 : z);
-        const uint32_t u0 = static_cast<uint32_t>(min_u);
-        const uint32_t u1 = static_cast<uint32_t>(max_u + 1);
-        const uint32_t v0 = static_cast<uint32_t>(min_v);
-        const uint32_t v1 = static_cast<uint32_t>(max_v + 1);
+        const uint32_t z_coord = static_cast<uint32_t>((positive_z ? z + 1 : z) * lod_scale);
+        const uint32_t u0 = static_cast<uint32_t>(min_u * lod_scale);
+        const uint32_t u1 = static_cast<uint32_t>((max_u + 1) * lod_scale);
+        const uint32_t v0 = static_cast<uint32_t>(min_v * lod_scale);
+        const uint32_t v1 = static_cast<uint32_t>((max_v + 1) * lod_scale);
 
         const glm::uvec2 uv0 = { u0, v0 };
         const glm::uvec2 uv1 = { u1, v0 };
@@ -299,15 +345,15 @@ MeshData Chunk::generate_mesh_data() {
         }
     };
 
-    for (int x = 0; x < CHUNK_SIZE_X; ++x) {
+    for (int x = 0; x < mesh_size_x; ++x) {
         greedy_merge(
-            CHUNK_SIZE_Z,
-            CHUNK_SIZE_Y,
+            mesh_size_z,
+            mesh_size_y,
             [&](int z, int y) -> AtlasTile {
                 if (!is_solid(x, y, z) || is_solid(x - 1, y, z)) {
                     return { UINT32_MAX, UINT32_MAX };
                 }
-                return get_block_texture(get_block(x, y, z)).side;
+                return get_block_texture(get_mesh_block(x, y, z)).side;
             },
             [&](int z0, int y0, int z1, int y1, AtlasTile tile) {
                 emit_x_face(x, false, y0, y1, z0, z1, tile);
@@ -315,13 +361,13 @@ MeshData Chunk::generate_mesh_data() {
         );
 
         greedy_merge(
-            CHUNK_SIZE_Z,
-            CHUNK_SIZE_Y,
+            mesh_size_z,
+            mesh_size_y,
             [&](int z, int y) -> AtlasTile {
                 if (!is_solid(x, y, z) || is_solid(x + 1, y, z)) {
                     return { UINT32_MAX, UINT32_MAX };
                 }
-                return get_block_texture(get_block(x, y, z)).side;
+                return get_block_texture(get_mesh_block(x, y, z)).side;
             },
             [&](int z0, int y0, int z1, int y1, AtlasTile tile) {
                 emit_x_face(x, true, y0, y1, z0, z1, tile);
@@ -329,15 +375,15 @@ MeshData Chunk::generate_mesh_data() {
         );
     }
 
-    for (int y = 0; y < CHUNK_SIZE_Y; ++y) {
+    for (int y = 0; y < mesh_size_y; ++y) {
         greedy_merge(
-            CHUNK_SIZE_X,
-            CHUNK_SIZE_Z,
+            mesh_size_x,
+            mesh_size_z,
             [&](int x, int z) -> AtlasTile {
                 if (!is_solid(x, y, z) || is_solid(x, y - 1, z)) {
                     return { UINT32_MAX, UINT32_MAX };
                 }
-                return get_block_texture(get_block(x, y, z)).bottom;
+                return get_block_texture(get_mesh_block(x, y, z)).bottom;
             },
             [&](int x0, int z0, int x1, int z1, AtlasTile tile) {
                 emit_y_face(y, false, x0, x1, z0, z1, tile);
@@ -345,13 +391,13 @@ MeshData Chunk::generate_mesh_data() {
         );
 
         greedy_merge(
-            CHUNK_SIZE_X,
-            CHUNK_SIZE_Z,
+            mesh_size_x,
+            mesh_size_z,
             [&](int x, int z) -> AtlasTile {
                 if (!is_solid(x, y, z) || is_solid(x, y + 1, z)) {
                     return { UINT32_MAX, UINT32_MAX };
                 }
-                return get_block_texture(get_block(x, y, z)).top;
+                return get_block_texture(get_mesh_block(x, y, z)).top;
             },
             [&](int x0, int z0, int x1, int z1, AtlasTile tile) {
                 emit_y_face(y, true, x0, x1, z0, z1, tile);
@@ -359,15 +405,15 @@ MeshData Chunk::generate_mesh_data() {
         );
     }
 
-    for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
+    for (int z = 0; z < mesh_size_z; ++z) {
         greedy_merge(
-            CHUNK_SIZE_X,
-            CHUNK_SIZE_Y,
+            mesh_size_x,
+            mesh_size_y,
             [&](int x, int y) -> AtlasTile {
                 if (!is_solid(x, y, z) || is_solid(x, y, z - 1)) {
                     return { UINT32_MAX, UINT32_MAX };
                 }
-                return get_block_texture(get_block(x, y, z)).side;
+                return get_block_texture(get_mesh_block(x, y, z)).side;
             },
             [&](int x0, int y0, int x1, int y1, AtlasTile tile) {
                 emit_z_face(z, false, x0, x1, y0, y1, tile);
@@ -375,13 +421,13 @@ MeshData Chunk::generate_mesh_data() {
         );
 
         greedy_merge(
-            CHUNK_SIZE_X,
-            CHUNK_SIZE_Y,
+            mesh_size_x,
+            mesh_size_y,
             [&](int x, int y) -> AtlasTile {
                 if (!is_solid(x, y, z) || is_solid(x, y, z + 1)) {
                     return { UINT32_MAX, UINT32_MAX };
                 }
-                return get_block_texture(get_block(x, y, z)).side;
+                return get_block_texture(get_mesh_block(x, y, z)).side;
             },
             [&](int x0, int y0, int x1, int y1, AtlasTile tile) {
                 emit_z_face(z, true, x0, x1, y0, y1, tile);
