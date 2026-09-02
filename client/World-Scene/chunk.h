@@ -59,6 +59,9 @@ class Chunk {
         ChunkLOD lod = ChunkLOD::LOD0;
 
         MeshData generate_mesh_data(ChunkLOD requested_lod = ChunkLOD::LOD0);
+        static MeshData generate_mesh_data(const std::vector<BlockType>& source_blocks,
+                           ChunkLOD requested_lod = ChunkLOD::LOD0);
+        std::vector<BlockType> copy_blocks() const;
         inline BlockType get_block(int x, int y, int z) {
             return blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)];
         }
@@ -85,5 +88,8 @@ class Chunk {
             }
             
             dirty = true;
+            ++mesh_revision;
         }
+
+        uint64_t mesh_revision = 0;
 };

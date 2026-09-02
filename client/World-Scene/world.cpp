@@ -25,6 +25,7 @@ World::World(Renderer& renderer_)
       moisture(7890, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm)
 {
     generation_thread = std::thread(&World::generate_chunks, this);
+    mesh_update_thread = std::thread(&World::update_chunk_meshes, this);
 }
 
 World::~World() {
@@ -34,6 +35,13 @@ World::~World() {
     }
     generation_condition.notify_one();
     generation_thread.join();
+
+    {
+        std::lock_guard lock(mesh_update_mutex);
+        stop_mesh_updates = true;
+    }
+    mesh_update_condition.notify_one();
+    mesh_update_thread.join();
 }
 
 void World::generate_chunks() {
@@ -67,6 +75,36 @@ void World::generate_chunks() {
         {
             std::lock_guard lock(generation_mutex);
             completed_chunks.push({pos, std::move(chunk), std::move(mesh_data)}); // submit as completed
+        }
+    }
+}
+
+void World::update_chunk_meshes() {
+    while (true) {
+        MeshUpdate update;
+        {
+            std::unique_lock lock(mesh_update_mutex);
+            mesh_update_condition.wait(lock, [this] {
+                return stop_mesh_updates || !mesh_update_queue.empty();
+            });
+
+            if (stop_mesh_updates && mesh_update_queue.empty()) {
+                return;
+            }
+
+            update = std::move(mesh_update_queue.front());
+            mesh_update_queue.pop();
+        }
+
+        MeshData mesh_data = Chunk::generate_mesh_data(update.blocks, update.lod);
+        {
+            std::lock_guard lock(mesh_update_mutex);
+            completed_mesh_updates.push({
+                update.pos,
+                update.lod,
+                update.revision,
+                std::move(mesh_data)
+            });
         }
     }
 }
@@ -293,6 +331,13 @@ void World::update_chunks() {
         }
     }
     for (const ChunkPos& pos : chunks_to_remove) {
+        {
+            std::lock_guard lock(mesh_update_mutex);
+            if (pending_mesh_updates.contains(pos)) {
+                continue;
+            }
+        }
+
         const Chunk& chunk = chunks.at(pos);
         if (chunk.object) {
             scene.remove_object_from_scene(chunk.object.get());
@@ -303,9 +348,59 @@ void World::update_chunks() {
         chunks.erase(pos);
     }
 
-    // Process dirty chunks. Keep old GPU buffers alive until all replacements are loaded,
-    // then wait for the device once before destroying them.
+    // Queue dirty CPU meshing and apply completed results on the render thread.
     std::vector<Mesh> old_meshes;
+
+    {
+        std::lock_guard lock(mesh_update_mutex);
+        while (!completed_mesh_updates.empty()) {
+            CompletedMeshUpdate completed = std::move(completed_mesh_updates.front());
+            completed_mesh_updates.pop();
+            pending_mesh_updates.erase(completed.pos);
+
+            auto chunk_it = chunks.find(completed.pos);
+            if (chunk_it == chunks.end()) {
+                continue;
+            }
+
+            Chunk& chunk = chunk_it->second;
+            if (chunk.mesh_revision != completed.revision || chunk.lod != completed.lod) {
+                continue;
+            }
+
+            MeshData mesh_data = std::move(completed.mesh_data);
+            bool empty_chunk = mesh_data.vertices.empty() || mesh_data.indices.empty();
+            if (chunk.object) {
+                scene.remove_object_from_scene(chunk.object.get());
+            }
+            if (chunk.mesh) {
+                old_meshes.push_back(std::move(*chunk.mesh));
+                chunk.mesh.reset();
+            }
+
+            if (empty_chunk) {
+                if (chunk.object) {
+                    chunk.object->mesh = nullptr;
+                }
+                chunk.dirty = false;
+                continue;
+            }
+
+            chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(mesh_data)));
+            if (!chunk.object) {
+                chunk.object = std::make_unique<Object>(
+                    chunk.mesh.get(),
+                    atlas_material.get(),
+                    glm::vec3(completed.pos.x * CHUNK_SIZE_X, completed.pos.y * CHUNK_SIZE_Y, completed.pos.z * CHUNK_SIZE_Z),
+                    glm::vec3(0.0f, 0.0f, 0.0f)
+                );
+            } else {
+                chunk.object->mesh = chunk.mesh.get();
+            }
+            scene.add_object_to_scene(chunk.object.get());
+            chunk.dirty = false;
+        }
+    }
 
     for (auto& [pos, chunk] : chunks) {
         const ChunkLOD desired_lod = lod_for_chunk_distance(
@@ -320,48 +415,13 @@ void World::update_chunks() {
         if (!chunk.dirty)
             continue;
 
-        // Generate CPU-side mesh data.
-        MeshData mesh_data = chunk.generate_mesh_data(chunk.lod);
-        bool empty_chunk = mesh_data.vertices.empty() || mesh_data.indices.empty();
-
-        // Remove the old object from the scene before replacing its mesh.
-        if (chunk.object) {
-            scene.remove_object_from_scene(chunk.object.get());
-        }
-
-        // Move the actual Mesh object out of the unique_ptr.
-        if (chunk.mesh) {
-            old_meshes.push_back(std::move(*chunk.mesh));
-            chunk.mesh.reset();
-        }
-
-        if (empty_chunk) {
-            // If the new mesh is empty, we don't need to create a new Mesh object.
-            if (chunk.object) {
-                chunk.object->mesh = nullptr;
-            }
-            chunk.dirty = false;
+        std::lock_guard lock(mesh_update_mutex);
+        if (pending_mesh_updates.contains(pos)) {
             continue;
         }
-
-        // Load the replacement mesh.
-        chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(mesh_data)));
-
-        // Point the scene object at the new mesh.
-        if (!chunk.object) {
-            chunk.object = std::make_unique<Object>(
-                chunk.mesh.get(),
-                atlas_material.get(),
-                glm::vec3(pos.x * CHUNK_SIZE_X, pos.y * CHUNK_SIZE_Y, pos.z * CHUNK_SIZE_Z),
-                glm::vec3(0.0f, 0.0f, 0.0f)
-            );
-        } else {
-            chunk.object->mesh = chunk.mesh.get();
-        }
-
-        
-        scene.add_object_to_scene(chunk.object.get());
-        chunk.dirty = false;
+        pending_mesh_updates.insert(pos);
+        mesh_update_queue.push({pos, chunk.lod, chunk.mesh_revision, chunk.copy_blocks()});
+        mesh_update_condition.notify_one();
     }
 
     // All new meshes have now been loaded.

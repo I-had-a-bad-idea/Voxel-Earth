@@ -64,6 +64,15 @@ Chunk::Chunk(const std::vector<TerrainColumn>& terrain_columns,
 }
 
 MeshData Chunk::generate_mesh_data(ChunkLOD requested_lod) {
+    return generate_mesh_data(blocks, requested_lod);
+}
+
+std::vector<BlockType> Chunk::copy_blocks() const {
+    return blocks;
+}
+
+MeshData Chunk::generate_mesh_data(const std::vector<BlockType>& source_blocks,
+                                   ChunkLOD requested_lod) {
     const int lod_scale = 1 << static_cast<int>(requested_lod);
     const int mesh_size_x = (CHUNK_SIZE_X + lod_scale - 1) / lod_scale;
     const int mesh_size_y = (CHUNK_SIZE_Y + lod_scale - 1) / lod_scale;
@@ -83,7 +92,7 @@ MeshData Chunk::generate_mesh_data(ChunkLOD requested_lod) {
                         for (int source_x = x * lod_scale;
                              source_x < std::min((x + 1) * lod_scale, CHUNK_SIZE_X);
                              ++source_x) {
-                            BlockType candidate = get_block(source_x, source_y, source_z);
+                            BlockType candidate = source_blocks[source_x + CHUNK_SIZE_X * (source_z + CHUNK_SIZE_Z * source_y)];
                             if (candidate != BlockType::Air) {
                                 representative = candidate;
                             }
