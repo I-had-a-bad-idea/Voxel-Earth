@@ -1,9 +1,10 @@
 struct VSInput {
-    float3 Pos;
-    float3 Normal;
-    float2 UV;
-    uint2 AtlasTile;
+    uint Pos;
+    uint Normal;
+    uint UV;
+    uint AtlasTile;
 };
+
 
 Sampler2D textures[];
 
@@ -37,6 +38,46 @@ struct VSOutput {
     uint2 AtlasTile;
 };
 
+float3 decode_position(uint packed)
+{
+    return float3(
+        packed & 0x7Fu,
+        (packed >> 7) & 0x7Fu,
+        (packed >> 14) & 0x7Fu
+    );
+}
+
+float3 decode_normal(uint packed)
+{
+    switch (packed & 7u)
+    {
+    case 0: return float3(-1, 0, 0);
+    case 1: return float3(1, 0, 0);
+    case 2: return float3(0, -1, 0);
+    case 3: return float3(0, 1, 0);
+    case 4: return float3(0, 0, -1);
+    case 5: return float3(0, 0, 1);
+    }
+
+    return float3(0, 0, 0);
+}
+
+float2 decode_uv(uint packed)
+{
+    return float2(
+        packed & 0xFFFFu,
+        packed >> 16
+    );
+}
+
+uint2 decode_atlas_tile(uint packed)
+{
+    return uint2(
+        packed & 0xFFFFu,
+        packed >> 16
+    );
+}
+
 [shader("vertex")]
 VSOutput main(
     VSInput input,
@@ -52,19 +93,26 @@ VSOutput main(
 
     float4x4 viewModel = mul(shaderData->view, modelMat);
 
-    output.Normal = mul((float3x3)viewModel, input.Normal);
-    output.UV = input.UV;
-    output.AtlasTile = input.AtlasTile;
+    float3 position = decode_position(input.Pos);
+    float3 normal = decode_normal(input.Normal);
+    float2 uv = decode_uv(input.UV);
+    uint2 atlasTile = decode_atlas_tile(input.AtlasTile);
+
+    output.Normal = mul((float3x3)viewModel, normal);
+
+    uv.y = 1.0f - uv.y; // Do the flip, that is no longer done when loading the mesh
+    output.UV = uv;
+    output.AtlasTile = atlasTile;
 
     output.Pos = mul(
         shaderData->projection,
-        mul(viewModel, float4(input.Pos, 1.0))
+        mul(viewModel, float4(position, 1.0))
     );
 
     output.Factor = obj.selected != 0 ? 3.0 : 1.0;
     output.InstanceIndex = instanceIndex;
 
-    float3 fragPos = mul(viewModel, float4(input.Pos, 1.0)).xyz;
+    float3 fragPos = mul(viewModel, float4(position, 1.0)).xyz;
     float3 lightPos = mul(shaderData->view, shaderData->lightPos).xyz;
 
     output.LightVec = lightPos - fragPos;
