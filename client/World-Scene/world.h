@@ -9,6 +9,7 @@
 #include <thread>
 #include <utility>
 #include <algorithm>
+#include <vector>
 
 #include <VGL/renderer.h>
 #include <VGL/object.h>
@@ -21,6 +22,21 @@ constexpr int RENDER_DISTANCE = 10;
 constexpr int VERTICAL_RENDER_DISTANCE = 5;
 
 class World {
+    struct ColumnPos {
+        int x;
+        int z;
+
+        bool operator==(const ColumnPos& other) const {
+            return x == other.x && z == other.z;
+        }
+    };
+
+    struct ColumnPosHash {
+        std::size_t operator()(const ColumnPos& pos) const {
+            return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.z) << 1);
+        }
+    };
+
     struct GeneratedChunk {
         ChunkPos pos;
         std::unique_ptr<Chunk> chunk;
@@ -42,6 +58,7 @@ class World {
     Noise mountains;
     Noise temperature;
     Noise moisture;
+    std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
 
     std::mutex generation_mutex;
     std::condition_variable generation_condition;
@@ -52,6 +69,8 @@ class World {
     bool stop_generation {false};
 
     void generate_chunks();
+    TerrainColumn generate_terrain_column(int world_x, int world_z);
+    std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
 

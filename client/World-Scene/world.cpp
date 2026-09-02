@@ -38,13 +38,10 @@ void World::generate_chunks() {
             generation_queue.pop();
         }
 
-        // create chunk
+        // Noise depends only on horizontal position, so reuse it across vertical chunks.
+        std::vector<TerrainColumn> terrain = get_chunk_terrain_columns(pos.x, pos.z);
         auto chunk = std::make_unique<Chunk>(
-            continental,
-            hills,
-            mountains,
-            temperature,
-            moisture,
+            terrain,
             pos.x,
             pos.y,
             pos.z
@@ -56,6 +53,89 @@ void World::generate_chunks() {
             completed_chunks.push({pos, std::move(chunk), std::move(mesh_data)}); // submit as completed
         }
     }
+}
+
+TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
+    // Get noise + convert -1..1 -> 0..1
+    float temperature_value = (temperature.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
+    float moisture_value = (moisture.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
+    float continental_value = (continental.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
+    float hills_value = (hills.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
+    float mountains_value = (mountains.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
+
+    // CONTINENTAL REGIONS
+    float coast_factor = 0.0f;
+    float highland_factor = 0.0f;
+    float mountain_factor = 0.0f;
+    // Coast: transition between ocean and land.
+    if (continental_value >= 0.38f && continental_value < 0.50f) {
+        float t = (continental_value - 0.38f) / 0.12f;
+        coast_factor = t * t * (3.0f - 2.0f * t);
+    }
+    // Highlands begin around 0.55.
+    if (continental_value > 0.55f) {
+        float t = std::clamp((continental_value - 0.55f) / 0.20f, 0.0f, 1.0f);
+        highland_factor = t * t * (3.0f - 2.0f * t);
+    }
+    // Mountain regions begin around 0.62.
+    if (continental_value > 0.62f) {
+        float t = std::clamp((continental_value - 0.62f) / 0.25f, 0.0f, 1.0f);
+        mountain_factor = t * t * (3.0f - 2.0f * t);
+    }
+
+    // BASE TERRAIN
+    const float sea_level = static_cast<float>(SEA_LEVEL);
+    float height_f = sea_level + (continental_value * 0.55f + hills_value * 0.45f - 0.45f) * (CHUNK_SIZE_Y * 0.45f);
+    height_f += highland_factor * CHUNK_SIZE_Y * 0.12f;
+    height_f += mountains_value * mountains_value * mountain_factor * CHUNK_SIZE_Y * 0.55f;
+    if (mountain_factor > 0.0f) {
+        height_f += hills_value * mountain_factor * CHUNK_SIZE_Y * 0.10f;
+    }
+    if (continental_value < 0.42f) {
+        height_f = sea_level - ((0.42f - continental_value) / 0.42f) * CHUNK_SIZE_Y * 0.20f;
+    }
+    if (coast_factor > 0.0f) {
+        height_f = glm::mix(height_f, sea_level, coast_factor * 0.35f);
+    }
+
+    TerrainColumn column;
+    column.height = std::clamp(static_cast<int>(height_f), 1, CHUNK_SIZE_Y - 1);
+    if (mountain_factor > 0.45f) {
+        column.biome = Biome::Mountains;
+    } else if (temperature_value < 0.30f) {
+        column.biome = Biome::Tundra;
+    } else if (temperature_value > 0.70f && moisture_value < 0.35f) {
+        column.biome = Biome::Desert;
+    } else if (moisture_value > 0.65f) {
+        column.biome = Biome::Forest;
+    } else {
+        column.biome = Biome::Plains;
+    }
+
+    column.surface = BlockType::Grass;
+    if (column.height <= SEA_LEVEL + 2 || column.biome == Biome::Desert) {
+        column.surface = BlockType::Sand;
+    } else if (column.biome == Biome::Tundra || (column.biome == Biome::Mountains && column.height > CHUNK_SIZE_Y * 0.72f)) {
+        column.surface = BlockType::Snow;
+    } else if (column.biome == Biome::Mountains) {
+        column.surface = BlockType::Stone;
+    }
+    return column;
+}
+
+std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chunk_z) {
+    std::vector<TerrainColumn> columns(CHUNK_SIZE_X * CHUNK_SIZE_Z);
+    for (int x = 0; x < CHUNK_SIZE_X; ++x) {
+        for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
+            const ColumnPos pos{chunk_x * CHUNK_SIZE_X + x, chunk_z * CHUNK_SIZE_Z + z};
+            auto [it, inserted] = terrain_columns.try_emplace(pos);
+            if (inserted) {
+                it->second = generate_terrain_column(pos.x, pos.z);
+            }
+            columns[x + CHUNK_SIZE_X * z] = it->second;
+        }
+    }
+    return columns;
 }
 
 void World::queue_chunk_generation(ChunkPos pos) {

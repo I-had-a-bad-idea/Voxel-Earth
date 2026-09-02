@@ -9,6 +9,12 @@
 #define CHUNK_SIZE_Y 64
 constexpr int SEA_LEVEL = CHUNK_SIZE_Y / 4;
 
+struct TerrainColumn {
+    int height;
+    Biome biome;
+    BlockType surface;
+};
+
 struct ChunkPos {
     int x;
     int y;
@@ -36,7 +42,7 @@ class Chunk {
     // the highest block in each collum (used to be mroe efficient when doing stuff (e.g. generating mesh))
 
     public:
-        Chunk(Noise& continental_noise, Noise& hill_noise, Noise& mountain_noise, Noise& temperature_noise, Noise& moisture_noise, int chunk_x, int chunk_y, int chunk_z);
+        Chunk(const std::vector<TerrainColumn>& terrain_columns, int chunk_x, int chunk_y, int chunk_z);
         Chunk();
 
         std::unique_ptr<Object> object;
