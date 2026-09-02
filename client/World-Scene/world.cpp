@@ -1,8 +1,8 @@
 #include "World.h"
 
 namespace {
-ChunkLOD lod_for_chunk_distance(int dx, int dz) {
-    const int distance = std::max(std::abs(dx), std::abs(dz));
+ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
+    const int distance = std::max(std::abs(dx), std::max(std::abs(dy), std::abs(dz)));
     if (distance <= 2) {
         return ChunkLOD::LOD0;
     }
@@ -202,6 +202,7 @@ void World::process_completed_chunks() { // on main thread
         Chunk& chunk = it->second;
         const ChunkLOD desired_lod = lod_for_chunk_distance(
             generated.pos.x - static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X)),
+            generated.pos.y - static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y)),
             generated.pos.z - static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z))
         );
         if (desired_lod != ChunkLOD::LOD0) {
@@ -309,6 +310,7 @@ void World::update_chunks() {
     for (auto& [pos, chunk] : chunks) {
         const ChunkLOD desired_lod = lod_for_chunk_distance(
             pos.x - camera_chunk_x,
+            pos.y - camera_chunk_y,
             pos.z - camera_chunk_z
         );
         if (chunk.lod != desired_lod) {
