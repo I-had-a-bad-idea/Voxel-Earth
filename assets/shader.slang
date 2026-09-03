@@ -134,7 +134,7 @@ float4 main(VSOutput input) {
 
     float3 ambient = 0.1;
 
-    float3 diffuse = max(dot(N, L), 0.0025);
+    float3 diffuse = saturate(dot(N, L));
     
     // Repeat the texture for every block in a greedy quad.
     float2 localUV = frac(input.UV);
