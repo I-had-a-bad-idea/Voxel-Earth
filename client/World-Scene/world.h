@@ -15,6 +15,7 @@
 #include <VGL/renderer.h>
 #include <VGL/object.h>
 
+#include "elevation_tile.h"
 #include "Math/noise.h"
 #include "block.h"
 #include "chunk.h"
