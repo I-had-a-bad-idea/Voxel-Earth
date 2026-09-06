@@ -80,7 +80,7 @@ class World {
     Noise temperature;
     Noise moisture;
     std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
-    std::unordered_map<TileCoordinate, ElevationTile> elevation_tiles;
+    std::unordered_map<TileCoordinate, ElevationTile, TileCoordinateHash> elevation_tiles;
 
     std::mutex generation_mutex;
     std::condition_variable generation_condition;

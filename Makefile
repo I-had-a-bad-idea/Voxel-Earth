@@ -13,6 +13,7 @@ VoxelVGL_INCLUDE = \
 
 CPPFLAGS = \
 	-I. \
+	-isystemexternal \
 	$(VoxelVGL_INCLUDE)
 
 LIBS = \
@@ -23,7 +24,7 @@ LIBS = \
 	-lvulkan-1 \
 	-l:VGL.a \
 	-lSDL3 \
-	-lslang
+	-lslang 
 
 
 # Sources
