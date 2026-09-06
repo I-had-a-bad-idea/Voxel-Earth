@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
-ElevationTile ElevationFetcher::fetch(int zoom, int tile_x, int tile_y) {
+ElevationTile elevation_tile_fetch(int zoom, int tile_x, int tile_y) {
     std::vector<uint8_t> png_data;
     const std::string path =
         "/elevation-tiles-prod/terrarium/" +

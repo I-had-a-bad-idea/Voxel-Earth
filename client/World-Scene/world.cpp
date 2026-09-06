@@ -129,54 +129,38 @@ void World::update_chunk_meshes() {
     }
 }
 
+ElevationTile& World::get_elevation_tile(int zoom, TileCoordinate coord) {
+    if (elevation_tiles.contains(coord)) {
+        return elevation_tiles.at(coord);
+    }
+    ElevationTile tile_data = elevation_tile_fetch(zoom, coord.x, coord.y);
+    auto [it, inserted] = elevation_tiles.emplace(coord, std::move(tile_data));
+}
+
+
 TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
+    const GeoCoordinate geo = world_to_geo(world_x, world_z);
+    const TileCoordinate tile = geo_to_tile(geo, ELEVATION_ZOOM);
+    
     // Get noise + convert -1..1 -> 0..1
     float temperature_value = (temperature.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
     float moisture_value = (moisture.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
-    float continental_value = (continental.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
-    float hills_value = (hills.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
-    float mountains_value = (mountains.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
 
-    // CONTINENTAL REGIONS
-    float coast_factor = 0.0f;
-    float highland_factor = 0.0f;
-    float mountain_factor = 0.0f;
-    // Coast: transition between ocean and land.
-    if (continental_value >= 0.38f && continental_value < 0.50f) {
-        float t = (continental_value - 0.38f) / 0.12f;
-        coast_factor = t * t * (3.0f - 2.0f * t);
-    }
-    // Highlands begin around 0.55.
-    if (continental_value > 0.55f) {
-        float t = std::clamp((continental_value - 0.55f) / 0.20f, 0.0f, 1.0f);
-        highland_factor = t * t * (3.0f - 2.0f * t);
-    }
-    // Mountain regions begin around 0.62.
-    if (continental_value > 0.62f) {
-        float t = std::clamp((continental_value - 0.62f) / 0.25f, 0.0f, 1.0f);
-        mountain_factor = t * t * (3.0f - 2.0f * t);
-    }
+    const ElevationTile& elevation = get_elevation_tile(ELEVATION_ZOOM, tile);
+    // Find pixel in tile corresponding to world coordinates
+    int pixel_x = world_x % ElevationTile::SIZE;
+    int pixel_y = world_z % ElevationTile::SIZE;
+    if (pixel_x < 0) pixel_x += ElevationTile::SIZE;
+    if (pixel_y < 0) pixel_y += ElevationTile::SIZE;
+    float height_f = elevation.get(pixel_x, pixel_y);
 
-    // BASE TERRAIN
-    const float sea_level = static_cast<float>(SEA_LEVEL);
-    float height_f = sea_level + (continental_value * 0.55f + hills_value * 0.45f - 0.45f) * (CHUNK_SIZE_Y * 0.45f);
-    height_f += highland_factor * CHUNK_SIZE_Y * 0.12f;
-    height_f += mountains_value * mountains_value * mountain_factor * CHUNK_SIZE_Y * 0.55f;
-    if (mountain_factor > 0.0f) {
-        height_f += hills_value * mountain_factor * CHUNK_SIZE_Y * 0.10f;
-    }
-    if (continental_value < 0.42f) {
-        height_f = sea_level - ((0.42f - continental_value) / 0.42f) * CHUNK_SIZE_Y * 0.20f;
-    }
-    if (coast_factor > 0.0f) {
-        height_f = glm::mix(height_f, sea_level, coast_factor * 0.35f);
-    }
 
     TerrainColumn column;
-    column.height = std::clamp(static_cast<int>(height_f), 1, CHUNK_SIZE_Y - 1);
-    if (mountain_factor > 0.45f) {
-        column.biome = Biome::Mountains;
-    } else if (temperature_value < 0.30f) {
+    column.height = static_cast<int>(std::round(height_f / METERS_PER_WORLD_BLOCK));
+    // if (mountain_factor > 0.45f) {
+    //     column.biome = Biome::Mountains;
+    // }
+    if (temperature_value < 0.30f) {
         column.biome = Biome::Tundra;
     } else if (temperature_value > 0.70f && moisture_value < 0.35f) {
         column.biome = Biome::Desert;
@@ -542,6 +526,20 @@ void World::setup() {
 
 void World::update(float delta_time) {
     update_chunks();
+    // Remove Elevation tiles that are too far away
+    std::vector<TileCoordinate> tiles_to_remove;
+    for (const auto& [coord, tile] : elevation_tiles) {
+        int dx = coord.x - geo_to_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).x;
+        int dz = coord.y - geo_to_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).y;
+        if (std::abs(dx) > ELEVATION_TILE_CACHE_DISTANCE || std::abs(dz) > ELEVATION_TILE_CACHE_DISTANCE) {
+            tiles_to_remove.push_back(coord);
+        }
+    }
+
+    for (const TileCoordinate& coord : tiles_to_remove) {
+        elevation_tiles.erase(coord);
+    }
+
 }
 
 Scene& World::get_scene() {

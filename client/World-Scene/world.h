@@ -23,6 +23,9 @@
 constexpr int RENDER_DISTANCE = 20;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
 constexpr int UNDERGROUND_STREAM_DISTANCE = 8;
+constexpr int ELEVATION_ZOOM = 12;
+constexpr int ELEVATION_TILE_CACHE_DISTANCE = 6; // in tiles, not chunks (24 chunks)
+// Each tile is 256x256 blocks, each chunk is 64x64x64 blocks, so 1 tile = 4 chunks.
 
 class World {
     struct ColumnPos {
@@ -77,6 +80,7 @@ class World {
     Noise temperature;
     Noise moisture;
     std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
+    std::unordered_map<TileCoordinate, ElevationTile> elevation_tiles;
 
     std::mutex generation_mutex;
     std::condition_variable generation_condition;
@@ -103,6 +107,7 @@ class World {
     std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
+    ElevationTile& get_elevation_tile(int zoom, TileCoordinate coord);
 
     public:
         World(Renderer& renderer_);
