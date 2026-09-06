@@ -33,6 +33,7 @@ cmake --build external/curl/build --config Release
 ```
 
 Find where CMake put the built curl and edit the Makefile accrodingly (replace the `-L$(CURL_DIR)/build/lib` with whatever you need)
+Seems like you also have to put the `libcurl.dll` file next to the executable.
 
 ### Compiling the actual project
 
