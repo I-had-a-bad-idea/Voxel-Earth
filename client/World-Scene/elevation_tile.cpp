@@ -2,35 +2,60 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
-#include <httplib/httplib.h>
 #include <stdexcept>
 #include <vector>
 
-ElevationTile elevation_tile_fetch(int zoom, int tile_x, int tile_y) {
-    const std::string path =
-        "/elevation-tiles-prod/terrarium/" +
+ElevationTileFetcher::ElevationTileFetcher() {
+    curl = curl_easy_init();
+
+    if (!curl)
+        throw std::runtime_error("curl_easy_init failed");
+}
+
+ElevationTileFetcher::~ElevationTileFetcher() {
+    curl_easy_cleanup(curl);
+}
+
+size_t ElevationTileFetcher::write_callback(void* contents, size_t size, size_t nmemb, void* userp) {
+    auto* buffer = static_cast<std::vector<uint8_t>*>(userp);
+    const size_t total = size * nmemb;
+
+    const auto* bytes = static_cast<const uint8_t*>(contents);
+    buffer->insert( buffer->end(), bytes, bytes + total);
+
+    return total;
+}
+
+ElevationTile ElevationTileFetcher::elevation_tile_fetch(int zoom, int tile_x, int tile_y) {
+    std::vector<uint8_t> png_data;
+    const std::string url =
+        "https://s3.amazonaws.com/"
+        "elevation-tiles-prod/terrarium/" +
         std::to_string(zoom) + "/" +
         std::to_string(tile_x) + "/" +
         std::to_string(tile_y) + ".png";
 
-    httplib::Client cli("https://s3.amazonaws.com");
-    cli.set_follow_location(true);
-    cli.set_connection_timeout(15);
-    cli.set_read_timeout(15);
-    cli.set_write_timeout(15);
-    cli.set_default_headers({
-        {"User-Agent", "MyWorld/1.0"}
-    });
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &png_data);
 
-    auto res = cli.Get(path);
-    if (!res) {
-        throw std::runtime_error("HTTP request failed: " + httplib::to_string(res.error()));
-    }
-    if (res->status != 200) {
-        throw std::runtime_error("HTTP error " + std::to_string(res->status));
-    }
-    const std::vector<uint8_t> png_data(res->body.begin(), res->body.end());
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Voxel-Earth/0.0");
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
 
+    CURLcode result = curl_easy_perform(curl);
+    long response_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+    if (result != CURLE_OK) {
+        throw std::runtime_error(curl_easy_strerror(result));
+    }
+
+    if (response_code != 200) {
+        throw std::runtime_error("HTTP error " + std::to_string(response_code));
+    }
+
+    // Decode PNG
     int width;
     int height;
     int channels;

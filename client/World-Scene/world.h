@@ -67,6 +67,8 @@ class World {
     Renderer& renderer;
     Scene scene;
 
+    ElevationTileFetcher elevation_tile_fetcher;
+
     std::unique_ptr<Mesh> cube_mesh;
     std::unique_ptr<Texture> atlas_texture;
     std::unique_ptr<Shader> shader;

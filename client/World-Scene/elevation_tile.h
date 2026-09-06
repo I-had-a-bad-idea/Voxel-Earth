@@ -7,6 +7,8 @@
 #include <cmath>
 #include <vector>
 
+#include <curl/curl.h>
+
 constexpr double METERS_PER_WORLD_BLOCK = 1.0;
 constexpr double WORLD_ORIGIN_LAT = 0.0;
 constexpr double WORLD_ORIGIN_LON = 0.0;
@@ -45,6 +47,18 @@ struct ElevationTile {
     }
 };
 
-ElevationTile elevation_tile_fetch(int zoom, int tile_x, int tile_y);
+
 GeoCoordinate world_to_geo(int x, int z);
 TileCoordinate geo_to_tile(GeoCoordinate coord, int zoom);
+
+class ElevationTileFetcher {
+    public:
+        ElevationTileFetcher();
+        ~ElevationTileFetcher();
+        ElevationTile elevation_tile_fetch(int zoom, int tile_x, int tile_y);
+    
+    private:
+        CURL* curl;
+
+        static size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp);
+};
