@@ -19,7 +19,7 @@ CPPFLAGS = \
 	$(VoxelVGL_INCLUDE)
 
 LIBS = \
-	-L$(CURL_DIR)/lib \
+	-L$(CURL_DIR)/build/lib \
 	-lcurl \
 	-lws2_32 \
 	-lwinmm \

@@ -32,7 +32,7 @@ Building curl:
 cmake --build external/curl/build --config Release
 ```
 
-Find where CMake put the built curl and edit the Makefile accrodingly (replace the `-L$(CURL_DIR)/lib` with whatever you need)
+Find where CMake put the built curl and edit the Makefile accrodingly (replace the `-L$(CURL_DIR)/build/lib` with whatever you need)
 
 ### Compiling the actual project
 
