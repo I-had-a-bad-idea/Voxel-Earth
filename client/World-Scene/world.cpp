@@ -135,6 +135,8 @@ ElevationTile& World::get_elevation_tile(int zoom, TileCoordinate coord) {
     }
     ElevationTile tile_data = elevation_tile_fetcher.elevation_tile_fetch(zoom, coord.x, coord.y);
     auto [it, inserted] = elevation_tiles.emplace(coord, std::move(tile_data));
+
+    return it->second;
 }
 
 

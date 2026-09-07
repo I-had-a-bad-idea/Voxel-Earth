@@ -10,8 +10,9 @@
 #include <curl/curl.h>
 
 constexpr double METERS_PER_WORLD_BLOCK = 1.0;
-constexpr double WORLD_ORIGIN_LAT = 0.0;
-constexpr double WORLD_ORIGIN_LON = 0.0;
+// MOunt everest
+constexpr double WORLD_ORIGIN_LAT = 27.9881;
+constexpr double WORLD_ORIGIN_LON = 86.9250;
 constexpr float PI = 3.1415926535897932384626433832795028841971; // No, I did not look it up (if I made a mistake it is now a feature)
 
 struct GeoCoordinate {
