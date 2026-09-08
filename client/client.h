@@ -33,3 +33,4 @@ uint32_t frame_count {0};
 bool quit {false};
 
 uint32_t my_player_id;
+float network_timer = 0.0f;

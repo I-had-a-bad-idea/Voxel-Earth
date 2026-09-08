@@ -16,6 +16,8 @@ enum class PacketType : uint8_t {
     AssingPlayerIdPacket = 5,
 };
 
+
+
 #pragma pack(push, 1)
 
 struct AssignPlayerIdPacket {

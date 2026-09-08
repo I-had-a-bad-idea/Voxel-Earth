@@ -331,8 +331,25 @@ int main(void) {
                 }
             }
         }
+        //// Networking
+        network_timer += elapsed_time;
+        
+        if (network_timer >= 0.05f) { // only send positon every 50ms
+            network_timer = 0.0f;
+            // Send position to server
+            PlayerPositionPacket packet;
+            packet.type = PacketType::PlayerPosition;
+            packet.player_id = my_player_id;
 
-        // Networking
+            packet.x = scene.cam_pos.x;
+            packet.y = scene.cam_pos.y;
+            packet.z = scene.cam_pos.z;
+
+            ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), 0);
+            enet_peer_send(peer, NetworkChannel::CHANNEL_MOVEMENT, enet_packet);
+        }
+
+
         while (enet_host_service(client, &event, 0) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_RECEIVE:

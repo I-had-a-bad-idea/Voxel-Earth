@@ -23,12 +23,9 @@ int main(void) {
 
     ENetEvent event;
 
-    while (1)
-    {
-        while (enet_host_service(server, &event, 1000) > 0)
-        {
-            switch (event.type)
-            {
+    while (1) {
+        while (enet_host_service(server, &event, 1000) > 0) {
+            switch (event.type) {
                 case ENET_EVENT_TYPE_CONNECT: {
                     Player player;
                     player.peer = event.peer;
@@ -50,15 +47,27 @@ int main(void) {
                     break;
                 }
                     case ENET_EVENT_TYPE_RECEIVE: {
-                        printf("Received: %s\n", (char *)event.packet->data);
+                        if (event.packet->dataLength >= sizeof(PlayerPositionPacket)) {
+                            PacketType type = *(PacketType *)event.packet->data;
 
-                        ENetPacket *reply =
-                            enet_packet_create(
-                                "Hello from server!",
-                                19,
-                                ENET_PACKET_FLAG_RELIABLE);
+                            if (type == PacketType::PlayerPosition) {
+                                PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
 
-                        enet_peer_send(event.peer, 0, reply);
+                                uint32_t player_id = *(uint32_t *)event.peer->data;
+                                uint32_t packet_player_id = packet->player_id;
+
+                                if (player_id != packet_player_id) {
+                                    break; // ignore, someone is trying to do nonsense
+                                }
+                                // Update player positon
+                                for (Player& player : players) {
+                                    if (player.id == player_id) {
+                                        player.position = glm::vec3(packet->x, packet->y, packet->z);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
 
                         enet_packet_destroy(event.packet);
                         break;
