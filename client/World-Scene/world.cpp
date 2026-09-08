@@ -129,14 +129,20 @@ void World::update_chunk_meshes() {
     }
 }
 
-ElevationTile& World::get_elevation_tile(int zoom, TileCoordinate coord) {
-    if (elevation_tiles.contains(coord)) {
-        return elevation_tiles.at(coord);
+float World::get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, int pixel_y) {
+    {
+        std::lock_guard lock(terrain_cache_mutex);
+        auto it = elevation_tiles.find(coord);
+        if (it != elevation_tiles.end()) {
+            return it->second.get(pixel_x, pixel_y);
+        }
     }
-    ElevationTile tile_data = elevation_tile_fetcher.elevation_tile_fetch(zoom, coord.x, coord.y);
-    auto [it, inserted] = elevation_tiles.emplace(coord, std::move(tile_data));
 
-    return it->second;
+    ElevationTile tile_data = elevation_tile_fetcher.elevation_tile_fetch(zoom, coord.x, coord.y);
+
+    std::lock_guard lock(terrain_cache_mutex);
+    auto [it, inserted] = elevation_tiles.emplace(coord, std::move(tile_data));
+    return it->second.get(pixel_x, pixel_y);
 }
 
 
@@ -148,9 +154,8 @@ TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
     float temperature_value = (temperature.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
     float moisture_value = (moisture.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
 
-    const ElevationTile& elevation = get_elevation_tile(ELEVATION_ZOOM, tile);
     const TileCoordinate pixel = geo_to_tile_pixel(geo, ELEVATION_ZOOM);
-    const float height_f = elevation.get(pixel.x, pixel.y);
+    const float height_f = get_elevation_height(ELEVATION_ZOOM, tile, pixel.x, pixel.y);
 
 
     TerrainColumn column;
@@ -521,6 +526,7 @@ void World::update(float delta_time) {
     update_chunks();
     // Remove Elevation tiles that are too far away
     std::vector<TileCoordinate> tiles_to_remove;
+    std::lock_guard lock(terrain_cache_mutex);
     for (const auto& [coord, tile] : elevation_tiles) {
         int dx = coord.x - geo_to_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).x;
         int dz = coord.y - geo_to_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).y;
@@ -574,6 +580,10 @@ void World::set_block(int x, int y, int z, BlockType block) {
     const int block_z = z - chunk_z * CHUNK_SIZE_Z;
 
     const ChunkPos pos {chunk_x, chunk_y, chunk_z};
+
+    if (!chunks.contains(pos)) {
+        return;
+    }
 
     Chunk& chunk = chunks.at(pos);
     chunk.set_block(block_x, block_y, block_z, block);

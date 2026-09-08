@@ -83,6 +83,7 @@ class World {
     Noise moisture;
     std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
     std::unordered_map<TileCoordinate, ElevationTile, TileCoordinateHash> elevation_tiles;
+    std::mutex terrain_cache_mutex;
 
     std::mutex generation_mutex;
     std::condition_variable generation_condition;
@@ -109,7 +110,7 @@ class World {
     std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
-    ElevationTile& get_elevation_tile(int zoom, TileCoordinate coord);
+    float get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, int pixel_y);
 
     public:
         World(Renderer& renderer_);
