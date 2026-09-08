@@ -9,7 +9,7 @@
 
 #include <curl/curl.h>
 
-constexpr double METERS_PER_WORLD_BLOCK = 5.0;
+constexpr double METERS_PER_WORLD_BLOCK = 1;
 // Grand canyon
 constexpr double WORLD_ORIGIN_LAT = 36.1069;
 constexpr double WORLD_ORIGIN_LON = -112.1129;

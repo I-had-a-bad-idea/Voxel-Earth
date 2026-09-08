@@ -21,7 +21,7 @@
 #include "chunk.h"
 
 constexpr int RENDER_DISTANCE = 10;
-constexpr int VERTICAL_RENDER_DISTANCE = 10;
+constexpr int VERTICAL_RENDER_DISTANCE = 20;
 constexpr int UNDERGROUND_STREAM_DISTANCE = 0;
 constexpr int ELEVATION_ZOOM = 15;
 constexpr int ELEVATION_TILE_CACHE_DISTANCE = 6; // in tiles, not chunks (24 chunks)

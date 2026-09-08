@@ -378,7 +378,6 @@ void World::update_chunks() {
         if (chunk.object) {
             if (chunk.in_scene) {
                 scene.remove_object_from_scene(chunk.object.get());
-                chunk.in_scene = false;
             }
         }
         if (chunk.mesh) {
@@ -529,7 +528,7 @@ void World::setup() {
     );
 
     std::cout << "Configuring scene..\n";
-    scene.cam_pos = glm::vec3(18.0f, 500.0f, 42.0f);
+    scene.cam_pos = glm::vec3(18.0f, 1000.0f, 42.0f);
     scene.light_pos = glm::vec3(-80.0f, 140.0f, 40.0f);
     scene.clear_color = glm::vec4(0.10f, 0.20f, 0.32f, 1.0f);
     scene.far_plane = static_cast<float>((RENDER_DISTANCE + 2) * 2 * CHUNK_SIZE_X);
