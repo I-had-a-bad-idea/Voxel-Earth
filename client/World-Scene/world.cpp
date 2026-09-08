@@ -314,10 +314,10 @@ void World::update_chunks() {
             queue_chunk_generation({x, 0, z});
             int start_y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
             if (step > UNDERGROUND_STREAM_DISTANCE) {
-                start_y = 0; // dont generate chunks underground
+                start_y = std::max(0, start_y); // dont generate chunks underground
             }
 
-            for (int y = start_y; y < 0 && y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
+            for (int y = start_y; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
                 queue_chunk_generation({x, y, z});
             }
         };
