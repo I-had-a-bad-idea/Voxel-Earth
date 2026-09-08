@@ -113,7 +113,9 @@ TileCoordinate geo_to_tile(GeoCoordinate coord, int zoom) {
     const double latitude = std::clamp(coord.latitude, -85.05112878, 85.05112878);
     const int n = 1 << zoom;
 
-    const double x = (coord.longitude + 180.0) / 360.0 * n;
+    const double world_x = (coord.longitude + 180.0) / 360.0 * n;
+    const double wrapped_x = std::fmod(world_x, static_cast<double>(n));
+    const double x = wrapped_x < 0.0 ? wrapped_x + n : wrapped_x;
     const double lat_rad = latitude * PI / 180.0;
     const double y = (1.0 - std::asinh(std::tan(lat_rad)) / PI) / 2.0 * n;
 
@@ -124,7 +126,9 @@ TileCoordinate geo_to_tile_pixel(GeoCoordinate coord, int zoom) {
     const double latitude = std::clamp(coord.latitude, -85.05112878, 85.05112878);
     const int n = 1 << zoom;
 
-    const double x = (coord.longitude + 180.0) / 360.0 * n;
+    const double world_x = (coord.longitude + 180.0) / 360.0 * n;
+    const double wrapped_x = std::fmod(world_x, static_cast<double>(n));
+    const double x = wrapped_x < 0.0 ? wrapped_x + n : wrapped_x;
     const double lat_rad = latitude * PI / 180.0;
     const double y = (1.0 - std::asinh(std::tan(lat_rad)) / PI) / 2.0 * n;
 

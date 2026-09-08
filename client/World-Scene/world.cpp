@@ -138,7 +138,13 @@ float World::get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, i
         }
     }
 
-    ElevationTile tile_data = elevation_tile_fetcher.elevation_tile_fetch(zoom, coord.x, coord.y);
+    ElevationTile tile_data;
+    try {
+        tile_data = elevation_tile_fetcher.elevation_tile_fetch(zoom, coord.x, coord.y);
+    } catch (const std::exception& error) {
+        std::cerr << "Failed to load elevation tile " << coord.x << ", " << coord.y
+                  << ": " << error.what() << ". Using sea level.\n";
+    }
 
     std::lock_guard lock(terrain_cache_mutex);
     auto [it, inserted] = elevation_tiles.emplace(coord, std::move(tile_data));
