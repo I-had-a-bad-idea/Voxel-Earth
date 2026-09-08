@@ -15,6 +15,7 @@
 #include <VGL/renderer.h>
 #include <VGL/object.h>
 
+#include "player.h"
 #include "elevation_tile.h"
 #include "Math/noise.h"
 #include "block.h"
@@ -69,7 +70,9 @@ class World {
 
     ElevationTileFetcher elevation_tile_fetcher;
 
-    std::unique_ptr<Mesh> cube_mesh;
+    std::vector<PlayerObject> player_objects;
+
+    std::unique_ptr<Mesh> player_mesh;
     std::unique_ptr<Texture> atlas_texture;
     std::unique_ptr<Shader> shader;
     std::unique_ptr<Material> atlas_material;
@@ -111,6 +114,10 @@ class World {
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
     float get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, int pixel_y);
+
+    void add_player_object(uint32_t player_id, glm::vec3 position);
+    void update_player_object(uint32_t player_id, glm::vec3 position);
+    void remove_player_object(uint32_t player_id);
 
     public:
         World(Renderer& renderer_);

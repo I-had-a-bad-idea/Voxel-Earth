@@ -506,6 +506,10 @@ void World::update_chunks() {
 void World::setup() {
     
     std::cout << "Loading resources...\n";
+    player_mesh = std::make_unique<Mesh>(
+        renderer.load_mesh("assets/player.obj")
+    );
+
     atlas_texture = std::make_unique<Texture>(
         renderer.load_texture("assets/blocks.ktx")
     );
@@ -619,5 +623,37 @@ void World::set_block(int x, int y, int z, BlockType block) {
     }
     if (block_z == CHUNK_SIZE_Z - 1) {
         mark_neighbor_dirty({chunk_x, chunk_y, chunk_z + 1});
+    }
+}
+    
+void World::add_player_object(uint32_t player_id, glm::vec3 position) {
+    // Create a new player object and add it to the scene
+    auto player_object = std::make_unique<Object>(
+        player_mesh.get(),
+        atlas_material.get(),
+        position,
+        glm::vec3(0.0f, 0.0f, 0.0f)
+    );
+    scene.add_object_to_scene(player_object.get());
+    player_objects.push_back({player_id, std::move(player_object)});
+}
+
+void World::update_player_object(uint32_t player_id, glm::vec3 position) {
+    // Find the player object with the given ID and update its position
+    for (auto& player : player_objects) {
+        if (player.player_id == player_id) {
+            player.object->position = position;
+            return;
+        }
+    }
+}
+void World::remove_player_object(uint32_t player_id) {
+    // Find the player object with the given ID and remove it from the scene
+    for (auto it = player_objects.begin(); it != player_objects.end(); ++it) {
+        if (it->player_id == player_id) {
+            scene.remove_object_from_scene(it->object.get());
+            player_objects.erase(it);
+            return;
+        }
     }
 }
