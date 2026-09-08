@@ -1,5 +1,4 @@
-#include <enet/enet.h>
-#include <stdio.h>
+#include "server.h"
 
 int main(void)
 {
@@ -33,7 +32,16 @@ int main(void)
             switch (event.type)
             {
                 case ENET_EVENT_TYPE_CONNECT:
-                    puts("Client connected!");
+                    Player player;
+                    player.peer = event.peer;
+                    player.id = next_player_id++;
+                    player.position = glm::vec3(0.0f);
+
+                    event.peer->data = new uint32_t(player.id);
+
+                    players.push_back(player);
+
+                    printf("Player %u connected\n", player.id);
                     break;
 
                 case ENET_EVENT_TYPE_RECEIVE:
