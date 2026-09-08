@@ -22,7 +22,7 @@
 
 constexpr int RENDER_DISTANCE = 10;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
-constexpr int UNDERGROUND_STREAM_DISTANCE = 1;
+constexpr int UNDERGROUND_STREAM_DISTANCE = 0;
 constexpr int ELEVATION_ZOOM = 15;
 constexpr int ELEVATION_TILE_CACHE_DISTANCE = 6; // in tiles, not chunks (24 chunks)
 // Each tile is 256x256 blocks, each chunk is 64x64x64 blocks, so 1 tile = 4 chunks.
