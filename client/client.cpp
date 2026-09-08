@@ -102,6 +102,39 @@ int main(void) {
         puts("Connection failed");
         return 1;
     }
+    bool got_player_id = false;
+    while (!got_player_id) {
+        if (enet_host_service(client, &event, 5000) <= 0) {
+            puts("Didn't receive player ID");
+            return 1;
+        }
+
+        switch (event.type) {
+            case ENET_EVENT_TYPE_RECEIVE: {
+                if (event.packet->dataLength >= sizeof(AssignPlayerIdPacket)) {
+                    PacketType type = *(PacketType *)event.packet->data;
+
+                    if (type == PacketType::AssingPlayerIdPacket) {
+                        AssignPlayerIdPacket *packet = (AssignPlayerIdPacket *)event.packet->data;
+                        my_player_id = packet->player_id;
+
+                        printf("Connected as player %u\n", my_player_id);
+                        got_player_id = true;
+                    }
+                }
+
+                enet_packet_destroy(event.packet);
+                break;
+            }
+
+            case ENET_EVENT_TYPE_DISCONNECT:
+                puts("Disconnected before receiving player ID");
+                return 1;
+
+            default:
+                break;
+        }
+    }
 
     std::cout << "Starting rendering..." << std::endl;
     while (!quit) {
@@ -300,7 +333,7 @@ int main(void) {
         }
 
         // Networking
-        while (enet_host_service(client, &event, 1000) > 0) {
+        while (enet_host_service(client, &event, 0) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_RECEIVE:
                     printf("Server says: %s\n", (char *)event.packet->data);

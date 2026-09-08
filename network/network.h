@@ -3,14 +3,25 @@
 #include <cstdint>
 #include <glm/vec3.hpp>
 
+enum NetworkChannel {
+    CHANNEL_RELIABLE = 0,
+    CHANNEL_MOVEMENT = 1,
+};
+
 enum class PacketType : uint8_t {
-    PlayerPosition = 1,
-    PlayerList     = 2,
-    BlockEdit      = 3,
-    ChunkData      = 4,
+    PlayerPosition       = 1,
+    PlayerList           = 2,
+    BlockEdit            = 3,
+    ChunkData            = 4,
+    AssingPlayerIdPacket = 5,
 };
 
 #pragma pack(push, 1)
+
+struct AssignPlayerIdPacket {
+    PacketType type;
+    uint32_t player_id;
+};
 
 struct PlayerPositionPacket {
     PacketType type;

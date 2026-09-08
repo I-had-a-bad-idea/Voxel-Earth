@@ -2,7 +2,9 @@
 #include <SDL3/SDL.h>
 #include <VGL/renderer.h>
 #include <stdio.h>
+
 #include "World-Scene/world.h"
+#include "network/network.h"
 
 constexpr float max_block_look_distance = 5.0f; // distance at which a block can be looked at / modified
 constexpr float move_speed = 15.0f; // blocks/sec
@@ -29,3 +31,5 @@ uint64_t last_time {SDL_GetTicks()}; // this is only FPS metrics related stuff
 uint64_t fps_update_time {last_time};
 uint32_t frame_count {0};
 bool quit {false};
+
+uint32_t my_player_id;

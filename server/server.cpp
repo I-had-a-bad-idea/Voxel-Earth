@@ -36,8 +36,15 @@ int main(void) {
                     player.position = glm::vec3(0.0f);
 
                     event.peer->data = new uint32_t(player.id);
-
                     players.push_back(player);
+
+                    AssignPlayerIdPacket packet;
+                    packet.type = PacketType::AssingPlayerIdPacket;
+                    packet.player_id = player.id;
+
+                    ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
+
+                    enet_peer_send(event.peer, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
 
                     printf("Player %u connected\n", player.id);
                     break;
