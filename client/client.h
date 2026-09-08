@@ -34,3 +34,10 @@ bool quit {false};
 
 uint32_t my_player_id;
 float network_timer = 0.0f;
+
+struct RemotePlayer {
+    uint32_t id;
+    glm::vec3 position;
+};
+
+std::vector<RemotePlayer> remote_players;

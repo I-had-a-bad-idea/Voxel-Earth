@@ -352,12 +352,38 @@ int main(void) {
 
         while (enet_host_service(client, &event, 0) > 0) {
             switch (event.type) {
-                case ENET_EVENT_TYPE_RECEIVE:
-                    printf("Server says: %s\n", (char *)event.packet->data);
-                    enet_packet_destroy(event.packet);
-                    enet_peer_disconnect(peer, 0);
-                    break;
+                case ENET_EVENT_TYPE_RECEIVE: {
+                    if (event.packet->dataLength >= sizeof(PlayerPositionPacket)) {
+                        PacketType type = *(PacketType *)event.packet->data;
 
+                        if (type == PacketType::PlayerPosition) {
+                            PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
+                            
+                            if (packet->player_id == my_player_id) {
+                                enet_packet_destroy(event.packet);
+                                break;
+                            }
+                            bool found = false;
+                            for (auto& player : remote_players)  {
+                                if (player.id == packet->player_id) {
+                                    player.position = glm::vec3(packet->x, packet->y, packet->z);
+                                    found = true;
+                                    world.update_player_object(player.id, player.position);
+                                    break;
+                                }
+                            }
+                            if (found) {
+                                break;
+                            }
+                            // Add player if not found
+                            remote_players.push_back({packet->player_id, glm::vec3(packet->x, packet->y, packet->z)});
+                            world.add_player_object(packet->player_id, glm::vec3(packet->x, packet->y, packet->z));
+                        }
+                    }
+                    
+                    enet_packet_destroy(event.packet);
+                    break;
+                }
                 case ENET_EVENT_TYPE_DISCONNECT:
                     puts("Disconnected");
                     enet_host_destroy(client);

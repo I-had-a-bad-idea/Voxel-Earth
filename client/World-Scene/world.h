@@ -15,7 +15,6 @@
 #include <VGL/renderer.h>
 #include <VGL/object.h>
 
-#include "player.h"
 #include "elevation_tile.h"
 #include "Math/noise.h"
 #include "block.h"
@@ -27,6 +26,11 @@ constexpr int UNDERGROUND_STREAM_DISTANCE = 0;
 constexpr int ELEVATION_ZOOM = 15;
 constexpr int ELEVATION_TILE_CACHE_DISTANCE = 6; // in tiles, not chunks (24 chunks)
 // Each tile is 256x256 blocks, each chunk is 64x64x64 blocks, so 1 tile = 4 chunks.
+
+struct PlayerObject {
+    uint32_t player_id;
+    std::unique_ptr<Object> object;
+};
 
 class World {
     struct ColumnPos {
@@ -115,10 +119,6 @@ class World {
     void process_completed_chunks();
     float get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, int pixel_y);
 
-    void add_player_object(uint32_t player_id, glm::vec3 position);
-    void update_player_object(uint32_t player_id, glm::vec3 position);
-    void remove_player_object(uint32_t player_id);
-
     public:
         World(Renderer& renderer_);
         ~World();
@@ -130,6 +130,10 @@ class World {
 
         BlockType get_block(int x, int y, int z);
         void set_block(int x, int y, int z, BlockType);
+
+        void add_player_object(uint32_t player_id, glm::vec3 position);
+        void update_player_object(uint32_t player_id, glm::vec3 position);
+        void remove_player_object(uint32_t player_id);
 };
 
 
