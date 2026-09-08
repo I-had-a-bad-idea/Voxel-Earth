@@ -80,6 +80,29 @@ int main(void) {
     world.setup();
     Scene& scene = world.get_scene();
 
+    std::cout << "Connecting to server...\n";
+    if (enet_initialize() != 0)
+    {
+        puts("Couldn't initialize ENet");
+        return 1;
+    }
+
+    ENetHost *client = enet_host_create(NULL, 1, 2, 0, 0);
+
+    ENetAddress address;
+    enet_address_set_host(&address, "127.0.0.1");
+    address.port = 7777;
+
+    ENetPeer *peer = enet_host_connect(client, &address, 2, 0);
+    ENetEvent event;
+
+    if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
+        puts("Connected!");
+    } else {
+        puts("Connection failed");
+        return 1;
+    }
+
     std::cout << "Starting rendering..." << std::endl;
     while (!quit) {
         uint64_t now = SDL_GetTicks();
@@ -207,8 +230,6 @@ int main(void) {
             scene.cam_pos += desired_movement;
         }
 
-
-
         if (keys[SDL_SCANCODE_ESCAPE]) {
             quit = true;
         }
@@ -277,58 +298,13 @@ int main(void) {
                 }
             }
         }
-    }
-    
-    if (enet_initialize() != 0)
-    {
-        puts("Couldn't initialize ENet");
-        return 1;
-    }
 
-    ENetHost *client =
-        enet_host_create(NULL, 1, 2, 0, 0);
-
-    ENetAddress address;
-    enet_address_set_host(&address, "127.0.0.1");
-    address.port = 7777;
-
-    ENetPeer *peer =
-        enet_host_connect(client, &address, 2, 0);
-
-    ENetEvent event;
-
-    if (enet_host_service(client, &event, 5000) > 0 &&
-        event.type == ENET_EVENT_TYPE_CONNECT)
-    {
-        puts("Connected!");
-
-        ENetPacket *packet =
-            enet_packet_create(
-                "Hello from client!",
-                19,
-                ENET_PACKET_FLAG_RELIABLE);
-
-        enet_peer_send(peer, 0, packet);
-        enet_host_flush(client);
-    }
-    else
-    {
-        puts("Connection failed");
-        return 1;
-    }
-
-    while (1)
-    {
-        while (enet_host_service(client, &event, 1000) > 0)
-        {
-            switch (event.type)
-            {
+        // Networking
+        while (enet_host_service(client, &event, 1000) > 0) {
+            switch (event.type) {
                 case ENET_EVENT_TYPE_RECEIVE:
-                    printf("Server says: %s\n",
-                           (char *)event.packet->data);
-
+                    printf("Server says: %s\n", (char *)event.packet->data);
                     enet_packet_destroy(event.packet);
-
                     enet_peer_disconnect(peer, 0);
                     break;
 
@@ -343,5 +319,6 @@ int main(void) {
                     break;
             }
         }
+
     }
 }

@@ -1,9 +1,7 @@
 #include "server.h"
 
-int main(void)
-{
-    if (enet_initialize() != 0)
-    {
+int main(void) {
+    if (enet_initialize() != 0) {
         puts("Couldn't initialize ENet");
         return 1;
     }
@@ -31,7 +29,7 @@ int main(void)
         {
             switch (event.type)
             {
-                case ENET_EVENT_TYPE_CONNECT:
+                case ENET_EVENT_TYPE_CONNECT: {
                     Player player;
                     player.peer = event.peer;
                     player.id = next_player_id++;
@@ -43,26 +41,25 @@ int main(void)
 
                     printf("Player %u connected\n", player.id);
                     break;
+                }
+                    case ENET_EVENT_TYPE_RECEIVE: {
+                        printf("Received: %s\n", (char *)event.packet->data);
 
-                case ENET_EVENT_TYPE_RECEIVE:
-                    printf("Received: %s\n",
-                           (char *)event.packet->data);
+                        ENetPacket *reply =
+                            enet_packet_create(
+                                "Hello from server!",
+                                19,
+                                ENET_PACKET_FLAG_RELIABLE);
 
-                    ENetPacket *reply =
-                        enet_packet_create(
-                            "Hello from server!",
-                            19,
-                            ENET_PACKET_FLAG_RELIABLE);
+                        enet_peer_send(event.peer, 0, reply);
 
-                    enet_peer_send(event.peer, 0, reply);
-
-                    enet_packet_destroy(event.packet);
-                    break;
-
-                case ENET_EVENT_TYPE_DISCONNECT:
-                    puts("Client disconnected");
-                    break;
-
+                        enet_packet_destroy(event.packet);
+                        break;
+                    }
+                    case ENET_EVENT_TYPE_DISCONNECT: {
+                        puts("Client disconnected");
+                        break;
+                    }
                 default:
                     break;
             }

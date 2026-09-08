@@ -12,5 +12,3 @@ struct Player {
 
 std::vector<Player> players;
 uint32_t next_player_id = 1;
-
-int main(void);
