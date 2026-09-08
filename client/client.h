@@ -14,9 +14,7 @@ constexpr float mouse_sensitivity = 0.0025f;
 constexpr float gravity_acceleration = 5.0f; // blocks / s^2
 constexpr float jump_velocity = 3.0f;
 constexpr float friction = 30.0f; // currently a flat value (TODO: make friction block dependent)
-constexpr float player_height = 1.0f; 
 constexpr float step_size = 0.05f;
-constexpr float player_half_width = 0.3f;
 constexpr float overlap_epsilon = 0.0001f;
 
 // Define window size

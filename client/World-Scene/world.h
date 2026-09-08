@@ -20,6 +20,9 @@
 #include "block.h"
 #include "chunk.h"
 
+constexpr float player_height = 1.0f;
+constexpr float player_half_width = 0.3f;
+
 constexpr int RENDER_DISTANCE = 10;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
 constexpr int UNDERGROUND_STREAM_DISTANCE = 0;
@@ -136,5 +139,6 @@ class World {
         void remove_player_object(uint32_t player_id);
 };
 
+MeshData generate_player_mesh();
 
 #endif

@@ -507,7 +507,7 @@ void World::setup() {
     
     std::cout << "Loading resources...\n";
     player_mesh = std::make_unique<Mesh>(
-        renderer.load_mesh("assets/player.obj")
+        renderer.load_mesh(generate_player_mesh())
     );
 
     atlas_texture = std::make_unique<Texture>(
@@ -625,8 +625,16 @@ void World::set_block(int x, int y, int z, BlockType block) {
         mark_neighbor_dirty({chunk_x, chunk_y, chunk_z + 1});
     }
 }
+
+glm::vec3 correct_player_object_position(glm::vec3 position) {
+    position.y -= 2 * player_height;
+    position.x -= 2 * player_half_width;
     
+    return position;
+}
+
 void World::add_player_object(uint32_t player_id, glm::vec3 position) {
+    position = correct_player_object_position(position);
     // Create a new player object and add it to the scene
     auto player_object = std::make_unique<Object>(
         player_mesh.get(),
@@ -639,6 +647,7 @@ void World::add_player_object(uint32_t player_id, glm::vec3 position) {
 }
 
 void World::update_player_object(uint32_t player_id, glm::vec3 position) {
+    position = correct_player_object_position(position);
     // Find the player object with the given ID and update its position
     for (auto& player : player_objects) {
         if (player.player_id == player_id) {
@@ -656,4 +665,87 @@ void World::remove_player_object(uint32_t player_id) {
             return;
         }
     }
+}
+
+
+MeshData generate_player_mesh() {
+    MeshData mesh_data;
+
+    BlockTexture top_block = get_block_texture(BlockType::Grass);
+    BlockTexture bottom_block = get_block_texture(BlockType::Dirt);
+
+    const AtlasTile bottom_side = bottom_block.side;
+    const AtlasTile bottom_top  = bottom_block.top;
+    const AtlasTile bottom_bottom = bottom_block.bottom;
+
+    const AtlasTile top_side = top_block.side;
+    const AtlasTile top_top  = top_block.top;
+    const AtlasTile top_bottom = top_block.bottom;
+
+    auto add_face_quad = [&](const glm::uvec3& v0, const glm::uvec3& v1, const glm::uvec3& v2, const glm::uvec3& v3,
+                             PackedNormal normal, AtlasTile tile) {
+        
+        const uint32_t start = static_cast<uint32_t>(mesh_data.vertices.size());
+        const uint32_t packed_normal = static_cast<uint32_t>(normal);
+        const uint32_t packed_tile = pack_atlas_tile(tile.x, tile.y);
+
+        mesh_data.vertices.push_back({pack_pos(v0.x, v0.y, v0.z), packed_normal, pack_uv(0, 0), packed_tile});
+        mesh_data.vertices.push_back({pack_pos(v1.x, v1.y, v1.z), packed_normal, pack_uv(1, 0), packed_tile});
+        mesh_data.vertices.push_back({pack_pos(v2.x, v2.y, v2.z), packed_normal, pack_uv(1, 1), packed_tile});
+        mesh_data.vertices.push_back({pack_pos(v3.x, v3.y, v3.z), packed_normal, pack_uv(0, 1), packed_tile});
+
+        mesh_data.indices.push_back(start + 0);
+        mesh_data.indices.push_back(start + 1);
+        mesh_data.indices.push_back(start + 2);
+
+        mesh_data.indices.push_back(start + 2);
+        mesh_data.indices.push_back(start + 3);
+        mesh_data.indices.push_back(start + 0);
+    };
+
+    auto add_cube = [&](uint32_t y0, AtlasTile side, AtlasTile top, AtlasTile bottom, bool include_bottom) {
+        const uint32_t x0 = 0;
+        const uint32_t x1 = 1;
+        const uint32_t z0 = 0;
+        const uint32_t z1 = 1;
+        const uint32_t y1 = y0 + 1;
+
+        // -X
+        add_face_quad({x0, y0, z1}, {x0, y0, z0},
+            {x0, y1, z0}, {x0, y1, z1},
+            PackedNormal::NegX, side);
+
+        // +X
+        add_face_quad({x1, y0, z0}, {x1, y0, z1},
+            {x1, y1, z1}, {x1, y1, z0},
+            PackedNormal::PosX, side);
+
+        // -Z
+        add_face_quad({x1, y0, z0}, {x0, y0, z0},
+            {x0, y1, z0}, {x1, y1, z0},
+            PackedNormal::NegZ, side);
+
+        // +Z
+        add_face_quad({x0, y0, z1}, {x1, y0, z1},
+            {x1, y1, z1}, {x0, y1, z1},
+            PackedNormal::PosZ, side);
+
+        // Bottom
+        // Don't generate this for the top cube because it touches the top face of the bottom cube.
+        if (include_bottom) {
+            add_face_quad({x0, y0, z0}, {x1, y0, z0},
+                {x1, y0, z1}, {x0, y0, z1},
+                PackedNormal::NegY, bottom);
+        }
+
+        // Top
+        add_face_quad({x0, y1, z1}, {x1, y1, z1},
+            {x1, y1, z0}, {x0, y1, z0},
+            PackedNormal::PosY, top);
+    };
+
+    add_cube(0, bottom_side, bottom_top, bottom_bottom, true);
+    add_cube(1, top_side, top_top, top_bottom, false); // no internal bottom face
+
+    return mesh_data;
 }
