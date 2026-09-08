@@ -6,28 +6,22 @@ ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
     if (distance <= 2) {
         return ChunkLOD::LOD0;
     }
-    if (distance <= 4) {
+    if (distance <= 3) {
         return ChunkLOD::LOD1;
     }
-    if (distance <= 8) {
+    if (distance <= 5) {
         return ChunkLOD::LOD2;
     }
-    if (distance <= 12) {
+    if (distance <= 7) {
         return ChunkLOD::LOD3;
     }
-    if (distance <= 16) {
+    if (distance <= 9) {
         return ChunkLOD::LOD4;
     }
-    if (distance <= 20) {
+    if (distance <= 11) {
         return ChunkLOD::LOD5;
     }
-    if (distance <= 25) {
-        return ChunkLOD::LOD10;
-    }
-    if (distance <= 32) {
-        return ChunkLOD::LOD32;
-    } 
-    return ChunkLOD::LOD64;
+    return ChunkLOD::LOD6;
 }
 }
 
@@ -129,54 +123,47 @@ void World::update_chunk_meshes() {
     }
 }
 
+float World::get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, int pixel_y) {
+    {
+        std::lock_guard lock(terrain_cache_mutex);
+        auto it = elevation_tiles.find(coord);
+        if (it != elevation_tiles.end()) {
+            return it->second.get(pixel_x, pixel_y);
+        }
+    }
+
+    ElevationTile tile_data;
+    try {
+        tile_data = elevation_tile_fetcher.elevation_tile_fetch(zoom, coord.x, coord.y);
+    } catch (const std::exception& error) {
+        std::cerr << "Failed to load elevation tile " << coord.x << ", " << coord.y
+                  << ": " << error.what() << ". Using sea level.\n";
+    }
+
+    std::lock_guard lock(terrain_cache_mutex);
+    auto [it, inserted] = elevation_tiles.emplace(coord, std::move(tile_data));
+    return it->second.get(pixel_x, pixel_y);
+}
+
+
 TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
+    const GeoCoordinate geo = world_to_geo(world_x, world_z);
+    const TileCoordinate tile = geo_to_tile(geo, ELEVATION_ZOOM);
+    
     // Get noise + convert -1..1 -> 0..1
     float temperature_value = (temperature.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
     float moisture_value = (moisture.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
-    float continental_value = (continental.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
-    float hills_value = (hills.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
-    float mountains_value = (mountains.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
 
-    // CONTINENTAL REGIONS
-    float coast_factor = 0.0f;
-    float highland_factor = 0.0f;
-    float mountain_factor = 0.0f;
-    // Coast: transition between ocean and land.
-    if (continental_value >= 0.38f && continental_value < 0.50f) {
-        float t = (continental_value - 0.38f) / 0.12f;
-        coast_factor = t * t * (3.0f - 2.0f * t);
-    }
-    // Highlands begin around 0.55.
-    if (continental_value > 0.55f) {
-        float t = std::clamp((continental_value - 0.55f) / 0.20f, 0.0f, 1.0f);
-        highland_factor = t * t * (3.0f - 2.0f * t);
-    }
-    // Mountain regions begin around 0.62.
-    if (continental_value > 0.62f) {
-        float t = std::clamp((continental_value - 0.62f) / 0.25f, 0.0f, 1.0f);
-        mountain_factor = t * t * (3.0f - 2.0f * t);
-    }
+    const TileCoordinate pixel = geo_to_tile_pixel(geo, ELEVATION_ZOOM);
+    const float height_f = get_elevation_height(ELEVATION_ZOOM, tile, pixel.x, pixel.y);
 
-    // BASE TERRAIN
-    const float sea_level = static_cast<float>(SEA_LEVEL);
-    float height_f = sea_level + (continental_value * 0.55f + hills_value * 0.45f - 0.45f) * (CHUNK_SIZE_Y * 0.45f);
-    height_f += highland_factor * CHUNK_SIZE_Y * 0.12f;
-    height_f += mountains_value * mountains_value * mountain_factor * CHUNK_SIZE_Y * 0.55f;
-    if (mountain_factor > 0.0f) {
-        height_f += hills_value * mountain_factor * CHUNK_SIZE_Y * 0.10f;
-    }
-    if (continental_value < 0.42f) {
-        height_f = sea_level - ((0.42f - continental_value) / 0.42f) * CHUNK_SIZE_Y * 0.20f;
-    }
-    if (coast_factor > 0.0f) {
-        height_f = glm::mix(height_f, sea_level, coast_factor * 0.35f);
-    }
 
     TerrainColumn column;
-    column.height = std::clamp(static_cast<int>(height_f), 1, CHUNK_SIZE_Y - 1);
-    if (mountain_factor > 0.45f) {
-        column.biome = Biome::Mountains;
-    } else if (temperature_value < 0.30f) {
+    column.height = static_cast<int>(std::round(height_f / METERS_PER_WORLD_BLOCK));
+    // if (mountain_factor > 0.45f) {
+    //     column.biome = Biome::Mountains;
+    // }
+    if (temperature_value < 0.30f) {
         column.biome = Biome::Tundra;
     } else if (temperature_value > 0.70f && moisture_value < 0.35f) {
         column.biome = Biome::Desert;
@@ -285,6 +272,7 @@ void World::process_completed_chunks() { // on main thread
         );
         if (!empty_chunk) {
             scene.add_object_to_scene(chunk.object.get()); // add to world
+            chunk.in_scene = true;
         }
         ++uploaded_chunks;
     }
@@ -308,12 +296,8 @@ void World::update_chunks() {
     generation_camera_chunk_z.store(camera_chunk_z, std::memory_order_relaxed);
 
     queue_chunk_generation({camera_chunk_x, 0, camera_chunk_z});
-    for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
-         y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE;
-         ++y) {
-        if (y < 0) {
-            queue_chunk_generation({camera_chunk_x, y, camera_chunk_z});
-        }
+    for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
+        queue_chunk_generation({camera_chunk_x, y, camera_chunk_z});
     }
 
     for (int step = 1; step <= RENDER_DISTANCE; ++step) {
@@ -330,13 +314,12 @@ void World::update_chunks() {
             }
 
             queue_chunk_generation({x, 0, z});
+            int start_y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
             if (step > UNDERGROUND_STREAM_DISTANCE) {
-                return;
+                start_y = std::max(0, start_y); // dont generate chunks underground
             }
 
-            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
-                 y < 0 && y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE;
-                 ++y) {
+            for (int y = start_y; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
                 queue_chunk_generation({x, y, z});
             }
         };
@@ -387,7 +370,9 @@ void World::update_chunks() {
 
         const Chunk& chunk = chunks.at(pos);
         if (chunk.object) {
-            scene.remove_object_from_scene(chunk.object.get());
+            if (chunk.in_scene) {
+                scene.remove_object_from_scene(chunk.object.get());
+            }
         }
         if (chunk.mesh) {
             renderer.destroy_mesh(*chunk.mesh);
@@ -418,7 +403,10 @@ void World::update_chunks() {
             MeshData mesh_data = std::move(completed.mesh_data);
             bool empty_chunk = mesh_data.vertices.empty() || mesh_data.indices.empty();
             if (chunk.object) {
-                scene.remove_object_from_scene(chunk.object.get());
+                if (chunk.in_scene) {
+                    scene.remove_object_from_scene(chunk.object.get());
+                    chunk.in_scene = false;
+                }
             }
             if (chunk.mesh) {
                 old_meshes.push_back(std::move(*chunk.mesh));
@@ -429,6 +417,7 @@ void World::update_chunks() {
                 if (chunk.object) {
                     chunk.object->mesh = nullptr;
                 }
+                chunk.in_scene = false;
                 chunk.dirty = false;
                 continue;
             }
@@ -445,6 +434,7 @@ void World::update_chunks() {
                 chunk.object->mesh = chunk.mesh.get();
             }
             scene.add_object_to_scene(chunk.object.get());
+            chunk.in_scene = true;
             chunk.dirty = false;
         }
     }
@@ -532,7 +522,7 @@ void World::setup() {
     );
 
     std::cout << "Configuring scene..\n";
-    scene.cam_pos = glm::vec3(18.0f, 50.0f, 42.0f);
+    scene.cam_pos = glm::vec3(18.0f, 1250.0f, 42.0f);
     scene.light_pos = glm::vec3(-80.0f, 140.0f, 40.0f);
     scene.clear_color = glm::vec4(0.10f, 0.20f, 0.32f, 1.0f);
     scene.far_plane = static_cast<float>((RENDER_DISTANCE + 2) * 2 * CHUNK_SIZE_X);
@@ -542,6 +532,21 @@ void World::setup() {
 
 void World::update(float delta_time) {
     update_chunks();
+    // Remove Elevation tiles that are too far away
+    std::vector<TileCoordinate> tiles_to_remove;
+    std::lock_guard lock(terrain_cache_mutex);
+    for (const auto& [coord, tile] : elevation_tiles) {
+        int dx = coord.x - geo_to_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).x;
+        int dz = coord.y - geo_to_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).y;
+        if (std::abs(dx) > ELEVATION_TILE_CACHE_DISTANCE || std::abs(dz) > ELEVATION_TILE_CACHE_DISTANCE) {
+            tiles_to_remove.push_back(coord);
+        }
+    }
+
+    for (const TileCoordinate& coord : tiles_to_remove) {
+        elevation_tiles.erase(coord);
+    }
+
 }
 
 Scene& World::get_scene() {
@@ -583,6 +588,10 @@ void World::set_block(int x, int y, int z, BlockType block) {
     const int block_z = z - chunk_z * CHUNK_SIZE_Z;
 
     const ChunkPos pos {chunk_x, chunk_y, chunk_z};
+
+    if (!chunks.contains(pos)) {
+        return;
+    }
 
     Chunk& chunk = chunks.at(pos);
     chunk.set_block(block_x, block_y, block_z, block);

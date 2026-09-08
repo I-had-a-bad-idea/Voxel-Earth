@@ -17,9 +17,7 @@ enum class ChunkLOD : char {
     LOD3,
     LOD4,
     LOD5,
-    LOD10,
-    LOD32,
-    LOD64
+    LOD6,
 };
 
 struct TerrainColumn {
@@ -60,16 +58,20 @@ class Chunk {
 
         std::unique_ptr<Object> object;
         std::unique_ptr<Mesh> mesh;
+        bool in_scene = false;
         bool dirty = true; // whether the chunk mesh needs to be updated
         ChunkLOD lod = ChunkLOD::LOD0;
 
         MeshData generate_mesh_data(ChunkLOD requested_lod = ChunkLOD::LOD0);
         static MeshData generate_mesh_data(const std::vector<BlockType>& source_blocks,
                            ChunkLOD requested_lod = ChunkLOD::LOD0);
+
         std::vector<BlockType> copy_blocks() const;
+
         inline BlockType get_block(int x, int y, int z) {
             return blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)];
         }
+        
         inline void set_block(int x, int y, int z, BlockType block) {
             blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)] = block;
             

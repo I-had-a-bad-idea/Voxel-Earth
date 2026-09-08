@@ -15,13 +15,17 @@
 #include <VGL/renderer.h>
 #include <VGL/object.h>
 
+#include "elevation_tile.h"
 #include "Math/noise.h"
 #include "block.h"
 #include "chunk.h"
 
-constexpr int RENDER_DISTANCE = 20;
+constexpr int RENDER_DISTANCE = 10;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
-constexpr int UNDERGROUND_STREAM_DISTANCE = 8;
+constexpr int UNDERGROUND_STREAM_DISTANCE = 0;
+constexpr int ELEVATION_ZOOM = 15;
+constexpr int ELEVATION_TILE_CACHE_DISTANCE = 6; // in tiles, not chunks (24 chunks)
+// Each tile is 256x256 blocks, each chunk is 64x64x64 blocks, so 1 tile = 4 chunks.
 
 class World {
     struct ColumnPos {
@@ -63,6 +67,8 @@ class World {
     Renderer& renderer;
     Scene scene;
 
+    ElevationTileFetcher elevation_tile_fetcher;
+
     std::unique_ptr<Mesh> cube_mesh;
     std::unique_ptr<Texture> atlas_texture;
     std::unique_ptr<Shader> shader;
@@ -76,6 +82,8 @@ class World {
     Noise temperature;
     Noise moisture;
     std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
+    std::unordered_map<TileCoordinate, ElevationTile, TileCoordinateHash> elevation_tiles;
+    std::mutex terrain_cache_mutex;
 
     std::mutex generation_mutex;
     std::condition_variable generation_condition;
@@ -102,6 +110,7 @@ class World {
     std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
+    float get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, int pixel_y);
 
     public:
         World(Renderer& renderer_);

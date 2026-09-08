@@ -2,6 +2,7 @@ CXX = g++
 CC  = gcc
 
 ENET_DIR = external/enet
+CURL_DIR = external/curl
 VoxelVGL = external/VoxelVGL
 
 CFLAGS = -isystem$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g -O3
@@ -13,9 +14,13 @@ VoxelVGL_INCLUDE = \
 
 CPPFLAGS = \
 	-I. \
+	-isystemexternal \
+	-isystem$(CURL_DIR)/include \
 	$(VoxelVGL_INCLUDE)
 
 LIBS = \
+	-L$(CURL_DIR)/build/lib \
+	-lcurl \
 	-lws2_32 \
 	-lwinmm \
 	-L$(VULKAN_SDK)/Lib \
@@ -23,7 +28,7 @@ LIBS = \
 	-lvulkan-1 \
 	-l:VGL.a \
 	-lSDL3 \
-	-lslang
+	-lslang \
 
 
 # Sources

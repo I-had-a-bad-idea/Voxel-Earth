@@ -93,7 +93,7 @@ int main(void) {
     int height = 540;
 
     // Create renderer
-    Renderer renderer("Voxel Engine", width, height, true, nullptr, false, 0);
+    Renderer renderer("Voxel Earth", width, height, true, nullptr, false, 0);
 
     std::cout << "Creating world...\n";
     // Create world
@@ -103,6 +103,7 @@ int main(void) {
 
     glm::vec3 camera_velocity(0.0f);
     float pitch = 0.0f;
+    bool fly {false};
 
     std::cout << "Starting rendering..." << std::endl;
     uint64_t last_time {SDL_GetTicks()}; // this is only FPS metrics related stuff
@@ -186,7 +187,7 @@ int main(void) {
             movement = glm::normalize(movement);
         
         // Apply gravity
-        if (!on_ground) {
+        if (!on_ground && !fly) {
             camera_velocity.y -= gravity_acceleration * elapsed_time;
         }
         // JUmping
@@ -195,32 +196,48 @@ int main(void) {
         }
         
         // Apply movement
-        glm::vec3 horizontal_vel (camera_velocity.x, 0, camera_velocity.z);
-        glm::vec3 wish_direction = forward * movement.z + right * movement.x;
-        if (glm::length(wish_direction) > 0.0f) {
-            wish_direction = glm::normalize(wish_direction);
+        if (fly) {
+            // Flying moves freely in all 3 axes
+            glm::vec3 fly_direction = camera_view_direction * movement.z + right * movement.x + glm::vec3(0.0f, movement.y, 0.0f);
 
-            float acceleration = on_ground ? ground_acceleration : air_acceleration; // use correct acceleration
+            if (glm::length(fly_direction) > 0.0f)
+                fly_direction = glm::normalize(fly_direction);
 
-            horizontal_vel += wish_direction * acceleration * elapsed_time;
+            camera_velocity = fly_direction * move_speed;
+        } else {
+            // Normal horizontal movement
+            glm::vec3 horizontal_vel(camera_velocity.x, 0, camera_velocity.z);
+            glm::vec3 wish_direction = forward * movement.z + right * movement.x;
+
+            if (glm::length(wish_direction) > 0.0f) {
+                wish_direction = glm::normalize(wish_direction);
+
+                float acceleration = on_ground ? ground_acceleration : air_acceleration;// use correct acceleration 
+                horizontal_vel += wish_direction * acceleration * elapsed_time;
+            }
+            // Clamp horizontal speed
+            float horizontal_speed = glm::length(horizontal_vel);
+
+            if (horizontal_speed > move_speed) {
+                horizontal_vel = (horizontal_vel / horizontal_speed) * move_speed;
+            }
+            // Put horizontal velocity back
+            camera_velocity.x = horizontal_vel.x;
+            camera_velocity.z = horizontal_vel.z;
         }
-        // Clamp horizontal speed
-        float horizontal_speed = glm::length(horizontal_vel);
-
-        if (horizontal_speed > move_speed) {
-            horizontal_vel = (horizontal_vel / horizontal_speed) * move_speed;
-        }
-
-        // Put horizontal velocity back
-        camera_velocity.x = horizontal_vel.x;
-        camera_velocity.z = horizontal_vel.z;
-
 
         // Apply velocity
         glm::vec3 desired_movement = camera_velocity * elapsed_time;
 
-        glm::vec3 allowed_movement = vector_collides_with_block(world, player_pos, desired_movement);
-        scene.cam_pos += allowed_movement;
+        if (!fly) {
+            // Collision logic
+            glm::vec3 allowed_movement = vector_collides_with_block(world, player_pos, desired_movement);
+            scene.cam_pos += allowed_movement;
+        } else {
+            scene.cam_pos += desired_movement;
+        }
+
+
 
         if (keys[SDL_SCANCODE_ESCAPE]) {
             quit = true;
@@ -277,10 +294,17 @@ int main(void) {
                 
             }
 
-
+            // Toggle flying 
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_F && !event.key.repeat) {
+                fly = !fly;
+            }
             // Zooming with the mouse wheel 
             if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-                scene.cam_pos += forward * (float)event.wheel.y * move_speed * 0.1f;
+                if (!fly) {
+                    scene.cam_pos += forward * (float)event.wheel.y * move_speed * 0.1f;
+                } else {
+                    scene.cam_pos += camera_view_direction * (float)event.wheel.y * move_speed * 0.1f;
+                }
             }
         }
     }
