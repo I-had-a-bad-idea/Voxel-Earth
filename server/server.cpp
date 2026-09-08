@@ -10,8 +10,7 @@ int main(void) {
     address.host = ENET_HOST_ANY;
     address.port = 7777;
 
-    ENetHost *server =
-        enet_host_create(&address, 32, 2, 0, 0);
+    server = enet_host_create(&address, 32, 2, 0, 0);
 
     if (!server)
     {
@@ -63,6 +62,8 @@ int main(void) {
                                 for (Player& player : players) {
                                     if (player.id == player_id) {
                                         player.position = glm::vec3(packet->x, packet->y, packet->z);
+                                        
+                                        broadcast_player_position_update(player); // tell clients to update this player position
                                         break;
                                     }
                                 }
@@ -84,4 +85,19 @@ int main(void) {
 
     enet_host_destroy(server);
     enet_deinitialize();
+}
+
+void broadcast_player_position_update(const Player& player) {
+    PlayerPositionPacket packet;
+
+    packet.type = PacketType::PlayerPosition;
+    packet.player_id = player.id;
+
+    packet.x = player.position.x;
+    packet.y = player.position.y;
+    packet.z = player.position.z;
+
+    ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), 0);
+
+    enet_host_broadcast(server, NetworkChannel::CHANNEL_MOVEMENT, enet_packet);
 }
