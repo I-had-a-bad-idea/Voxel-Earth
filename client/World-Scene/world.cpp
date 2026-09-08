@@ -278,6 +278,7 @@ void World::process_completed_chunks() { // on main thread
         );
         if (!empty_chunk) {
             scene.add_object_to_scene(chunk.object.get()); // add to world
+            chunk.in_scene = true;
         }
         ++uploaded_chunks;
     }
@@ -375,7 +376,10 @@ void World::update_chunks() {
 
         const Chunk& chunk = chunks.at(pos);
         if (chunk.object) {
-            scene.remove_object_from_scene(chunk.object.get());
+            if (chunk.in_scene) {
+                scene.remove_object_from_scene(chunk.object.get());
+                chunk.in_scene = false;
+            }
         }
         if (chunk.mesh) {
             renderer.destroy_mesh(*chunk.mesh);
@@ -406,7 +410,10 @@ void World::update_chunks() {
             MeshData mesh_data = std::move(completed.mesh_data);
             bool empty_chunk = mesh_data.vertices.empty() || mesh_data.indices.empty();
             if (chunk.object) {
-                scene.remove_object_from_scene(chunk.object.get());
+                if (chunk.in_scene) {
+                    scene.remove_object_from_scene(chunk.object.get());
+                    chunk.in_scene = false;
+                }
             }
             if (chunk.mesh) {
                 old_meshes.push_back(std::move(*chunk.mesh));
@@ -417,6 +424,7 @@ void World::update_chunks() {
                 if (chunk.object) {
                     chunk.object->mesh = nullptr;
                 }
+                chunk.in_scene = false;
                 chunk.dirty = false;
                 continue;
             }
@@ -433,6 +441,7 @@ void World::update_chunks() {
                 chunk.object->mesh = chunk.mesh.get();
             }
             scene.add_object_to_scene(chunk.object.get());
+            chunk.in_scene = true;
             chunk.dirty = false;
         }
     }
