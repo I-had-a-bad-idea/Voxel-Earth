@@ -149,12 +149,8 @@ TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
     float moisture_value = (moisture.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
 
     const ElevationTile& elevation = get_elevation_tile(ELEVATION_ZOOM, tile);
-    // Find pixel in tile corresponding to world coordinates
-    int pixel_x = world_x % ElevationTile::SIZE;
-    int pixel_y = world_z % ElevationTile::SIZE;
-    if (pixel_x < 0) pixel_x += ElevationTile::SIZE;
-    if (pixel_y < 0) pixel_y += ElevationTile::SIZE;
-    float height_f = elevation.get(pixel_x, pixel_y);
+    const TileCoordinate pixel = geo_to_tile_pixel(geo, ELEVATION_ZOOM);
+    const float height_f = elevation.get(pixel.x, pixel.y);
 
 
     TerrainColumn column;

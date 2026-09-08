@@ -9,10 +9,10 @@
 
 #include <curl/curl.h>
 
-constexpr double METERS_PER_WORLD_BLOCK = 1.0;
-// MOunt everest
-constexpr double WORLD_ORIGIN_LAT = 27.9881;
-constexpr double WORLD_ORIGIN_LON = 86.9250;
+constexpr double METERS_PER_WORLD_BLOCK = 5.0;
+// Grand canyon
+constexpr double WORLD_ORIGIN_LAT = 36.1069;
+constexpr double WORLD_ORIGIN_LON = -112.1129;
 constexpr float PI = 3.1415926535897932384626433832795028841971; // No, I did not look it up (if I made a mistake it is now a feature)
 
 struct GeoCoordinate {
@@ -51,6 +51,7 @@ struct ElevationTile {
 
 GeoCoordinate world_to_geo(int x, int z);
 TileCoordinate geo_to_tile(GeoCoordinate coord, int zoom);
+TileCoordinate geo_to_tile_pixel(GeoCoordinate coord, int zoom);
 
 class ElevationTileFetcher {
     public:
