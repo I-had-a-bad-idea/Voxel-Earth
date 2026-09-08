@@ -47,7 +47,8 @@ CLIENT_SRC = \
 	$(wildcard client/World-Scene/*.cpp)
 
 SHARED_SRC = \
-	$(wildcard Math/*.cpp)
+	$(wildcard Math/*.cpp) \
+	$(wildcard network/*.cpp)
 
 SERVER_SRC = \
 	server/server.c
