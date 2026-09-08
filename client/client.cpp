@@ -93,7 +93,7 @@ int main(void) {
     int height = 540;
 
     // Create renderer
-    Renderer renderer("Voxel Engine", width, height, true, nullptr, false, 0);
+    Renderer renderer("Voxel Earth", width, height, true, nullptr, false, 0);
 
     std::cout << "Creating world...\n";
     // Create world

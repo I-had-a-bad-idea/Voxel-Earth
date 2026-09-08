@@ -17,9 +17,7 @@ enum class ChunkLOD : char {
     LOD3,
     LOD4,
     LOD5,
-    LOD10,
-    LOD32,
-    LOD64
+    LOD6,
 };
 
 struct TerrainColumn {

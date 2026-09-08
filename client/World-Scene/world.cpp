@@ -6,28 +6,22 @@ ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
     if (distance <= 2) {
         return ChunkLOD::LOD0;
     }
-    if (distance <= 4) {
+    if (distance <= 3) {
         return ChunkLOD::LOD1;
     }
-    if (distance <= 8) {
+    if (distance <= 5) {
         return ChunkLOD::LOD2;
     }
-    if (distance <= 12) {
+    if (distance <= 7) {
         return ChunkLOD::LOD3;
     }
-    if (distance <= 16) {
+    if (distance <= 9) {
         return ChunkLOD::LOD4;
     }
-    if (distance <= 20) {
+    if (distance <= 11) {
         return ChunkLOD::LOD5;
     }
-    if (distance <= 25) {
-        return ChunkLOD::LOD10;
-    }
-    if (distance <= 32) {
-        return ChunkLOD::LOD32;
-    } 
-    return ChunkLOD::LOD64;
+    return ChunkLOD::LOD6;
 }
 }
 
@@ -528,7 +522,7 @@ void World::setup() {
     );
 
     std::cout << "Configuring scene..\n";
-    scene.cam_pos = glm::vec3(18.0f, 1000.0f, 42.0f);
+    scene.cam_pos = glm::vec3(18.0f, 1250.0f, 42.0f);
     scene.light_pos = glm::vec3(-80.0f, 140.0f, 40.0f);
     scene.clear_color = glm::vec4(0.10f, 0.20f, 0.32f, 1.0f);
     scene.far_plane = static_cast<float>((RENDER_DISTANCE + 2) * 2 * CHUNK_SIZE_X);
