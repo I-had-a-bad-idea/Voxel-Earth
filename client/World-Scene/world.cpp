@@ -294,12 +294,8 @@ void World::update_chunks() {
     generation_camera_chunk_z.store(camera_chunk_z, std::memory_order_relaxed);
 
     queue_chunk_generation({camera_chunk_x, 0, camera_chunk_z});
-    for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
-         y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE;
-         ++y) {
-        if (y < 0) {
-            queue_chunk_generation({camera_chunk_x, y, camera_chunk_z});
-        }
+    for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
+        queue_chunk_generation({camera_chunk_x, y, camera_chunk_z});
     }
 
     for (int step = 1; step <= RENDER_DISTANCE; ++step) {
@@ -316,13 +312,12 @@ void World::update_chunks() {
             }
 
             queue_chunk_generation({x, 0, z});
+            int start_y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
             if (step > UNDERGROUND_STREAM_DISTANCE) {
-                return;
+                start_y = 0; // dont generate chunks underground
             }
 
-            for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
-                 y < 0 && y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE;
-                 ++y) {
+            for (int y = start_y; y < 0 && y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
                 queue_chunk_generation({x, y, z});
             }
         };
@@ -518,7 +513,7 @@ void World::setup() {
     );
 
     std::cout << "Configuring scene..\n";
-    scene.cam_pos = glm::vec3(18.0f, 50.0f, 42.0f);
+    scene.cam_pos = glm::vec3(18.0f, 500.0f, 42.0f);
     scene.light_pos = glm::vec3(-80.0f, 140.0f, 40.0f);
     scene.clear_color = glm::vec4(0.10f, 0.20f, 0.32f, 1.0f);
     scene.far_plane = static_cast<float>((RENDER_DISTANCE + 2) * 2 * CHUNK_SIZE_X);
