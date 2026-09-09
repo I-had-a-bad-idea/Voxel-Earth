@@ -14,6 +14,7 @@
 
 #include <VGL/renderer.h>
 #include <VGL/object.h>
+#include <VGL/math.h>
 
 #include "elevation_tile.h"
 #include "Math/noise.h"
