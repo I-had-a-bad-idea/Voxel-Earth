@@ -354,6 +354,8 @@ void World::update_chunks() {
     process_completed_chunks();
 
 
+    std::vector<Mesh> old_meshes;
+
     if (camera_chunk_changed) {
         // Remove chunks that are too far away.
         std::vector<ChunkPos> chunks_to_remove;
@@ -379,22 +381,21 @@ void World::update_chunks() {
                 }
             }
 
-            const Chunk& chunk = chunks.at(pos);
+            Chunk& chunk = chunks.at(pos);
             if (chunk.object) {
                 if (chunk.in_scene) {
                     scene.remove_object_from_scene(chunk.object.get());
                 }
             }
             if (chunk.mesh) {
-                renderer.destroy_mesh(*chunk.mesh);
+                old_meshes.push_back(std::move(*chunk.mesh));
+                chunk.mesh.reset();
             }
             chunks.erase(pos);
         }
     }
 
     // Queue dirty CPU meshing and apply completed results on the render thread.
-    std::vector<Mesh> old_meshes;
-
     {
         std::lock_guard lock(mesh_update_mutex);
         while (!completed_mesh_updates.empty()) {
