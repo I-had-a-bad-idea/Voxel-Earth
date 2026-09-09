@@ -23,11 +23,14 @@
 constexpr float player_height = 1.0f;
 constexpr float player_half_width = 0.3f;
 
+
+constexpr int MAX_NEW_REQUESTS_PER_FRAME = 8;
+
 constexpr int RENDER_DISTANCE = 35;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
 constexpr int UNDERGROUND_STREAM_DISTANCE = 0;
 constexpr int ELEVATION_ZOOM = 15;
-constexpr int ELEVATION_TILE_CACHE_DISTANCE = 6; // in tiles, not chunks (24 chunks)
+constexpr int ELEVATION_TILE_CACHE_DISTANCE = 10; // in tiles, not chunks (40 chunks)
 // Each tile is 256x256 blocks, each chunk is 64x64x64 blocks, so 1 tile = 4 chunks.
 
 struct PlayerObject {
@@ -86,14 +89,15 @@ class World {
     
     std::unordered_map<ChunkPos, Chunk, ChunkPosHash> chunks;
     
-    Noise continental;
-    Noise hills;
-    Noise mountains;
     Noise temperature;
     Noise moisture;
     std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
     std::unordered_map<TileCoordinate, ElevationTile, TileCoordinateHash> elevation_tiles;
     std::mutex terrain_cache_mutex;
+
+
+    std::vector<ChunkPos> new_requests;
+    int next_new_request = 0;
 
     std::mutex generation_mutex;
     std::condition_variable generation_condition;

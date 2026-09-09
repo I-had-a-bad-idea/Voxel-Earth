@@ -28,9 +28,6 @@ ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
 
 World::World(Renderer& renderer_)
     : renderer(renderer_),
-      continental(1234, 0.0008f, 4, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
-      hills(5678, 0.006f, 4, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
-      mountains(9012, 0.0025f, 5, 2.1f, 0.55f, FastNoiseLite::FractalType_Ridged),
       temperature(3456, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
       moisture(7890, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm)
 {
@@ -304,9 +301,9 @@ void World::update_chunks() {
         generation_camera_chunk_y.store(camera_chunk_y, std::memory_order_relaxed);
         generation_camera_chunk_z.store(camera_chunk_z, std::memory_order_relaxed);
 
-        queue_chunk_generation({camera_chunk_x, 0, camera_chunk_z});
+        new_requests.push_back({camera_chunk_x, 0, camera_chunk_z});
         for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
-            queue_chunk_generation({camera_chunk_x, y, camera_chunk_z});
+            new_requests.push_back({camera_chunk_x, y, camera_chunk_z});
         }
 
         for (int step = 1; step <= RENDER_DISTANCE; ++step) {
@@ -322,14 +319,14 @@ void World::update_chunks() {
                     return;
                 }
 
-                queue_chunk_generation({x, 0, z});
+                new_requests.push_back({x, 0, z});
                 int start_y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
                 if (step > UNDERGROUND_STREAM_DISTANCE) {
                     start_y = std::max(0, start_y); // dont generate chunks underground
                 }
 
                 for (int y = start_y; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
-                    queue_chunk_generation({x, y, z});
+                    new_requests.push_back({x, y, z});
                 }
             };
 
@@ -349,6 +346,20 @@ void World::update_chunks() {
                 queue_vertical_range(max_x, z);
             }
         }
+    }
+
+    // Queue some new chunk requests
+    int requests_this_frame = 0;
+    while (next_new_request < new_requests.size() && requests_this_frame < MAX_NEW_REQUESTS_PER_FRAME) {
+        queue_chunk_generation(new_requests[next_new_request]);
+        next_new_request++;
+        requests_this_frame++;
+        
+    }
+
+    if (next_new_request == new_requests.size()) {
+        new_requests.clear();
+        next_new_request = 0;
     }
 
     process_completed_chunks();
@@ -452,6 +463,7 @@ void World::update_chunks() {
         }
     }
 
+    // Update dirty chunks and LOD
     if (camera_chunk_changed || mesh_updates_needed) {
         for (auto& [pos, chunk] : chunks) {
             const ChunkLOD desired_lod = lod_for_chunk_distance(
