@@ -3,7 +3,7 @@
 #include <VGL/renderer.h>
 #include <stdio.h>
 
-#include "World-Scene/world.h"
+#include "World/world.h"
 #include "network/network.h"
 
 constexpr float max_block_look_distance = 5.0f; // distance at which a block can be looked at / modified

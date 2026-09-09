@@ -48,6 +48,7 @@ CLIENT_SRC = \
 
 SHARED_SRC = \
 	$(wildcard Math/*.cpp) \
+	$(wildcard World/*.cpp) \
 	$(wildcard network/*.cpp)
 
 SERVER_SRC = \
