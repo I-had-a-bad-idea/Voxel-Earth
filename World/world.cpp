@@ -2,27 +2,27 @@
 
 namespace {
 ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
-    // return ChunkLOD::LOD0;
-    const int distance = std::max(std::abs(dx), std::max(std::abs(dy), std::abs(dz)));
-    if (distance <= 2) {
-        return ChunkLOD::LOD0;
-    }
-    if (distance <= 3) {
-        return ChunkLOD::LOD1;
-    }
-    if (distance <= 5) {
-        return ChunkLOD::LOD2;
-    }
-    if (distance <= 7) {
-        return ChunkLOD::LOD3;
-    }
-    if (distance <= 9) {
-        return ChunkLOD::LOD4;
-    }
-    if (distance <= 11) {
-        return ChunkLOD::LOD5;
-    }
-    return ChunkLOD::LOD6;
+    return ChunkLOD::LOD0;
+    // const int distance = std::max(std::abs(dx), std::max(std::abs(dy), std::abs(dz)));
+    // if (distance <= 2) {
+    //     return ChunkLOD::LOD0;
+    // }
+    // if (distance <= 3) {
+    //     return ChunkLOD::LOD1;
+    // }
+    // if (distance <= 5) {
+    //     return ChunkLOD::LOD2;
+    // }
+    // if (distance <= 7) {
+    //     return ChunkLOD::LOD3;
+    // }
+    // if (distance <= 9) {
+    //     return ChunkLOD::LOD4;
+    // }
+    // if (distance <= 11) {
+    //     return ChunkLOD::LOD5;
+    // }
+    // return ChunkLOD::LOD6;
 }
 }
 
@@ -292,93 +292,104 @@ void World::update_chunks() {
     int camera_chunk_y = static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
 
-    generation_camera_chunk_x.store(camera_chunk_x, std::memory_order_relaxed);
-    generation_camera_chunk_y.store(camera_chunk_y, std::memory_order_relaxed);
-    generation_camera_chunk_z.store(camera_chunk_z, std::memory_order_relaxed);
+    const ChunkPos camera_chunk {camera_chunk_x, camera_chunk_y, camera_chunk_z};
+    const bool camera_chunk_changed = !has_stream_camera_chunk ||
+        camera_chunk != last_stream_camera_chunk;
 
-    queue_chunk_generation({camera_chunk_x, 0, camera_chunk_z});
-    for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
-        queue_chunk_generation({camera_chunk_x, y, camera_chunk_z});
-    }
+    if (camera_chunk_changed) {
+        last_stream_camera_chunk = camera_chunk;
+        has_stream_camera_chunk = true;
 
-    for (int step = 1; step <= RENDER_DISTANCE; ++step) {
-        int min_x = camera_chunk_x - step;
-        int max_x = camera_chunk_x + step;
-        int min_z = camera_chunk_z - step;
-        int max_z = camera_chunk_z + step;
+        generation_camera_chunk_x.store(camera_chunk_x, std::memory_order_relaxed);
+        generation_camera_chunk_y.store(camera_chunk_y, std::memory_order_relaxed);
+        generation_camera_chunk_z.store(camera_chunk_z, std::memory_order_relaxed);
 
-        auto queue_vertical_range = [&](int x, int z) {
-            const int dx = x - camera_chunk_x;
-            const int dz = z - camera_chunk_z;
-            if (dx * dx + dz * dz > RENDER_DISTANCE * RENDER_DISTANCE) {
-                return;
-            }
-
-            queue_chunk_generation({x, 0, z});
-            int start_y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
-            if (step > UNDERGROUND_STREAM_DISTANCE) {
-                start_y = std::max(0, start_y); // dont generate chunks underground
-            }
-
-            for (int y = start_y; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
-                queue_chunk_generation({x, y, z});
-            }
-        };
-
-        // Bottom row
-        for (int x = min_x; x <= max_x; ++x) {
-            queue_vertical_range(x, min_z);
+        queue_chunk_generation({camera_chunk_x, 0, camera_chunk_z});
+        for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
+            queue_chunk_generation({camera_chunk_x, y, camera_chunk_z});
         }
 
-        // Top row
-        for (int x = min_x; x <= max_x; ++x) {
-            queue_vertical_range(x, max_z);
-        }
+        for (int step = 1; step <= RENDER_DISTANCE; ++step) {
+            int min_x = camera_chunk_x - step;
+            int max_x = camera_chunk_x + step;
+            int min_z = camera_chunk_z - step;
+            int max_z = camera_chunk_z + step;
 
-        // Left and right columns, excluding corners
-        for (int z = min_z + 1; z < max_z; ++z) {
-            queue_vertical_range(min_x, z);
-            queue_vertical_range(max_x, z);
+            auto queue_vertical_range = [&](int x, int z) {
+                const int dx = x - camera_chunk_x;
+                const int dz = z - camera_chunk_z;
+                if (dx * dx + dz * dz > RENDER_DISTANCE * RENDER_DISTANCE) {
+                    return;
+                }
+
+                queue_chunk_generation({x, 0, z});
+                int start_y = camera_chunk_y - VERTICAL_RENDER_DISTANCE;
+                if (step > UNDERGROUND_STREAM_DISTANCE) {
+                    start_y = std::max(0, start_y); // dont generate chunks underground
+                }
+
+                for (int y = start_y; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
+                    queue_chunk_generation({x, y, z});
+                }
+            };
+
+            // Bottom row
+            for (int x = min_x; x <= max_x; ++x) {
+                queue_vertical_range(x, min_z);
+            }
+
+            // Top row
+            for (int x = min_x; x <= max_x; ++x) {
+                queue_vertical_range(x, max_z);
+            }
+
+            // Left and right columns, excluding corners
+            for (int z = min_z + 1; z < max_z; ++z) {
+                queue_vertical_range(min_x, z);
+                queue_vertical_range(max_x, z);
+            }
         }
     }
 
     process_completed_chunks();
 
 
-    // Remove chunks that are too far away
-    std::vector<ChunkPos> chunks_to_remove;
-    for (const auto& [pos, chunk] : chunks) {
-        int dx = pos.x - camera_chunk_x;
-        int dy = pos.y - camera_chunk_y;
-        int dz = pos.z - camera_chunk_z;
-        const bool underground_too_far = pos.y < 0 &&
-            (std::abs(dx) > UNDERGROUND_STREAM_DISTANCE ||
-             std::abs(dz) > UNDERGROUND_STREAM_DISTANCE);
-        if (std::abs(dx) > RENDER_DISTANCE ||
-            std::abs(dy) > VERTICAL_RENDER_DISTANCE ||
-            std::abs(dz) > RENDER_DISTANCE ||
-            underground_too_far) {
-            chunks_to_remove.push_back(pos);
-        }
-    }
-    for (const ChunkPos& pos : chunks_to_remove) {
-        {
-            std::lock_guard lock(mesh_update_mutex);
-            if (pending_mesh_updates.contains(pos)) {
-                continue;
+    if (camera_chunk_changed) {
+        // Remove chunks that are too far away.
+        std::vector<ChunkPos> chunks_to_remove;
+        for (const auto& [pos, chunk] : chunks) {
+            int dx = pos.x - camera_chunk_x;
+            int dy = pos.y - camera_chunk_y;
+            int dz = pos.z - camera_chunk_z;
+            const bool underground_too_far = pos.y < 0 &&
+                (std::abs(dx) > UNDERGROUND_STREAM_DISTANCE ||
+                 std::abs(dz) > UNDERGROUND_STREAM_DISTANCE);
+            if (std::abs(dx) > RENDER_DISTANCE ||
+                std::abs(dy) > VERTICAL_RENDER_DISTANCE ||
+                std::abs(dz) > RENDER_DISTANCE ||
+                underground_too_far) {
+                chunks_to_remove.push_back(pos);
             }
         }
+        for (const ChunkPos& pos : chunks_to_remove) {
+            {
+                std::lock_guard lock(mesh_update_mutex);
+                if (pending_mesh_updates.contains(pos)) {
+                    continue;
+                }
+            }
 
-        const Chunk& chunk = chunks.at(pos);
-        if (chunk.object) {
-            if (chunk.in_scene) {
-                scene.remove_object_from_scene(chunk.object.get());
+            const Chunk& chunk = chunks.at(pos);
+            if (chunk.object) {
+                if (chunk.in_scene) {
+                    scene.remove_object_from_scene(chunk.object.get());
+                }
             }
+            if (chunk.mesh) {
+                renderer.destroy_mesh(*chunk.mesh);
+            }
+            chunks.erase(pos);
         }
-        if (chunk.mesh) {
-            renderer.destroy_mesh(*chunk.mesh);
-        }
-        chunks.erase(pos);
     }
 
     // Queue dirty CPU meshing and apply completed results on the render thread.
@@ -440,26 +451,29 @@ void World::update_chunks() {
         }
     }
 
-    for (auto& [pos, chunk] : chunks) {
-        const ChunkLOD desired_lod = lod_for_chunk_distance(
-            pos.x - camera_chunk_x,
-            pos.y - camera_chunk_y,
-            pos.z - camera_chunk_z
-        );
-        if (chunk.lod != desired_lod) {
-            chunk.lod = desired_lod;
-            chunk.dirty = true;
-        }
-        if (!chunk.dirty)
-            continue;
+    if (camera_chunk_changed || mesh_updates_needed) {
+        for (auto& [pos, chunk] : chunks) {
+            const ChunkLOD desired_lod = lod_for_chunk_distance(
+                pos.x - camera_chunk_x,
+                pos.y - camera_chunk_y,
+                pos.z - camera_chunk_z
+            );
+            if (chunk.lod != desired_lod) {
+                chunk.lod = desired_lod;
+                chunk.dirty = true;
+            }
+            if (!chunk.dirty)
+                continue;
 
-        std::lock_guard lock(mesh_update_mutex);
-        if (pending_mesh_updates.contains(pos)) {
-            continue;
+            std::lock_guard lock(mesh_update_mutex);
+            if (pending_mesh_updates.contains(pos)) {
+                continue;
+            }
+            pending_mesh_updates.insert(pos);
+            mesh_update_queue.push({pos, chunk.lod, chunk.mesh_revision, chunk.copy_blocks()});
+            mesh_update_condition.notify_one();
         }
-        pending_mesh_updates.insert(pos);
-        mesh_update_queue.push({pos, chunk.lod, chunk.mesh_revision, chunk.copy_blocks()});
-        mesh_update_condition.notify_one();
+        mesh_updates_needed = false;
     }
 
     // All new meshes have now been loaded.
@@ -600,10 +614,12 @@ void World::set_block(int x, int y, int z, BlockType block) {
 
     Chunk& chunk = chunks.at(pos);
     chunk.set_block(block_x, block_y, block_z, block);
+    mesh_updates_needed = true;
 
     auto mark_neighbor_dirty = [this](ChunkPos neighbor_pos) {
         if (auto neighbor = chunks.find(neighbor_pos); neighbor != chunks.end()) {
             neighbor->second.dirty = true;
+            mesh_updates_needed = true;
         }
     };
 

@@ -23,7 +23,7 @@
 constexpr float player_height = 1.0f;
 constexpr float player_half_width = 0.3f;
 
-constexpr int RENDER_DISTANCE = 10;
+constexpr int RENDER_DISTANCE = 35;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
 constexpr int UNDERGROUND_STREAM_DISTANCE = 0;
 constexpr int ELEVATION_ZOOM = 15;
@@ -103,6 +103,9 @@ class World {
     std::atomic<int> generation_camera_chunk_x {0};
     std::atomic<int> generation_camera_chunk_y {0};
     std::atomic<int> generation_camera_chunk_z {0};
+    ChunkPos last_stream_camera_chunk {0, 0, 0};
+    bool has_stream_camera_chunk {false};
+    bool mesh_updates_needed {false};
     std::thread generation_thread;
     bool stop_generation {false};
 
