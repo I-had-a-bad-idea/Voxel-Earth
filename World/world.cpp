@@ -495,7 +495,6 @@ void World::update_chunks() {
 
 
     // Frustum culling
-    const float half_fov = glm::radians(scene.fovy * 0.7); // dont use 0.5, since then it culls to early
 
     // Approximate the chunk with a bounding sphere.
     const float half_x = CHUNK_SIZE_X * 0.5f;
@@ -519,14 +518,7 @@ void World::update_chunks() {
             continue;
         }
 
-        glm::vec3 direction = to_chunk / distance;
-        float angle = glm::dot(camera_forward, direction);
-
-        // Expand the viewing cone by the angular radius of the chunk.
-        float angular_radius = std::asin(std::min(1.0f, chunk_radius / distance));
-        float min_angle = std::cos(half_fov + angular_radius);
-
-        chunk.object->visible = angle >= min_angle;
+        // chunk.object->visible = sphere_in_frustum(scene.frustum, chunk_center, chunk_radius);
     }
 
 }
