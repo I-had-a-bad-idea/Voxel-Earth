@@ -2,27 +2,27 @@
 
 namespace {
 ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
-    return ChunkLOD::LOD0;
-    // const int distance = std::max(std::abs(dx), std::max(std::abs(dy), std::abs(dz)));
-    // if (distance <= 2) {
-    //     return ChunkLOD::LOD0;
-    // }
-    // if (distance <= 3) {
-    //     return ChunkLOD::LOD1;
-    // }
-    // if (distance <= 5) {
-    //     return ChunkLOD::LOD2;
-    // }
-    // if (distance <= 7) {
-    //     return ChunkLOD::LOD3;
-    // }
-    // if (distance <= 9) {
-    //     return ChunkLOD::LOD4;
-    // }
-    // if (distance <= 11) {
-    //     return ChunkLOD::LOD5;
-    // }
-    // return ChunkLOD::LOD6;
+    // return ChunkLOD::LOD0;
+    const int distance = std::max(std::abs(dx), std::max(std::abs(dy), std::abs(dz)));
+    if (distance <= 2) {
+        return ChunkLOD::LOD0;
+    }
+    if (distance <= 3) {
+        return ChunkLOD::LOD1;
+    }
+    if (distance <= 5) {
+        return ChunkLOD::LOD2;
+    }
+    if (distance <= 7) {
+        return ChunkLOD::LOD3;
+    }
+    if (distance <= 9) {
+        return ChunkLOD::LOD4;
+    }
+    if (distance <= 11) {
+        return ChunkLOD::LOD5;
+    }
+    return ChunkLOD::LOD6;
 }
 }
 
