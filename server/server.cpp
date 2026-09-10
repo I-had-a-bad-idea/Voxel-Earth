@@ -106,7 +106,9 @@ int main(void) {
                         break;
                     }
                     case ENET_EVENT_TYPE_DISCONNECT: {
-                        puts("Client disconnected");
+                        uint32_t player_id = *(uint32_t *)event.peer->data;
+                        printf("Player %u disconnected\n", player_id);
+                        broadcast_player_disconnected(player_id);
                         break;
                     }
                 default:
@@ -150,6 +152,17 @@ void broadcast_block_edit(int x, int y, int z, BlockType block, uint32_t player_
     packet.z = z;
     packet.block_type = block;
 
+    ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
+
+    enet_host_broadcast(server, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
+}
+
+void broadcast_player_disconnected(const uint32_t player_id) {
+    PlayerDisconnectedPacket packet;
+
+    packet.type = PacketType::PlayerDisconnected;
+    packet.player_id = player_id;
+    
     ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
 
     enet_host_broadcast(server, NetworkChannel::CHANNEL_RELIABLE, enet_packet);

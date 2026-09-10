@@ -14,6 +14,7 @@ enum class PacketType : uint8_t {
     BlockEdit            = 3,
     ChunkData            = 4,
     AssingPlayerIdPacket = 5,
+    PlayerDisconnected   = 6,
 };
 
 
@@ -21,6 +22,11 @@ enum class PacketType : uint8_t {
 #pragma pack(push, 1)
 
 struct AssignPlayerIdPacket {
+    PacketType type;
+    uint32_t player_id;
+};
+
+struct PlayerDisconnectedPacket {
     PacketType type;
     uint32_t player_id;
 };

@@ -28,6 +28,7 @@ const std::string world_state_filename = "world_state.dat";
 
 void broadcast_player_position_update(const Player& player);
 void broadcast_block_edit(int x, int y, int z, BlockType block, uint32_t player_id);
+void broadcast_player_disconnected(const uint32_t player_id);
 
 void save_world_state_to_file(const std::string& filename);
 void load_world_state_from_file(const std::string& filename);

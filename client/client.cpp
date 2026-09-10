@@ -390,6 +390,25 @@ int main(void) {
                                 }
 
                                 world.set_block(packet->x, packet->y, packet->z, packet->block_type);
+                                break;
+                            }
+                            case PacketType::PlayerDisconnected: {
+                                if (event.packet->dataLength < sizeof(PlayerDisconnectedPacket)) break;
+
+                                PlayerDisconnectedPacket *packet = (PlayerDisconnectedPacket *)event.packet->data;
+
+                                uint32_t player_id = packet->player_id;
+                                std::cout << "Player " << player_id << " disconnected" << std::endl;
+                                // Remove player from remote_players
+                                auto it = std::remove_if(remote_players.begin(), remote_players.end(),
+                                    [player_id](const RemotePlayer& player) {
+                                        return player.id == player_id;
+                                    });
+                                if (it != remote_players.end()) {
+                                    world.remove_player_object(player_id);
+                                    remote_players.erase(it, remote_players.end());
+                                }
+                                break;
                             }
                         }
                     }
@@ -399,8 +418,7 @@ int main(void) {
                 }
                 case ENET_EVENT_TYPE_DISCONNECT:
                     puts("Disconnected");
-                    enet_host_destroy(client);
-                    enet_deinitialize();
+                    quit = true;
                     // return 0;
                     break;
 
@@ -408,8 +426,9 @@ int main(void) {
                     break;
             }
         }
-
     }
+    enet_host_destroy(client);
+    enet_deinitialize();
 }
 void send_block_edit_update(int x, int y, int z, BlockType block) {
     BlockEditPacket packet;
