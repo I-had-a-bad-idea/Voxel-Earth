@@ -87,13 +87,13 @@ int main(void) {
         return 1;
     }
 
-    ENetHost *client = enet_host_create(NULL, 1, 2, 0, 0);
+    client = enet_host_create(NULL, 1, 2, 0, 0);
 
     ENetAddress address;
     enet_address_set_host(&address, "127.0.0.1");
     address.port = 7777;
 
-    ENetPeer *peer = enet_host_connect(client, &address, 2, 0);
+    peer = enet_host_connect(client, &address, 2, 0);
     ENetEvent event;
 
     if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
@@ -302,6 +302,7 @@ int main(void) {
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                 // Placing / Breaking
                 BlockHit hit = get_block_looked_at(world, camera_view_direction);
+                BlockType place_block = BlockType::Stone; // TODO: Make placed block choosable
 
                 if (!hit.found) {
                     continue;
@@ -309,13 +310,13 @@ int main(void) {
                 if (event.button.button == SDL_BUTTON_LEFT) {
                     // Break block
                     world.set_block(hit.block.x, hit.block.y, hit.block.z, BlockType::Air);
+                    send_block_edit_update(hit.block.x, hit.block.y, hit.block.z, BlockType::Air); // send update to server
                 }
                 if (event.button.button == SDL_BUTTON_RIGHT) {
                     // Place block (directly infront of the block looked at)
-                    world.set_block(hit.place_block.x, hit.place_block.y, hit.place_block.z, BlockType::Stone);
-                    // TODO: Make placed block choosable
+                    world.set_block(hit.place_block.x, hit.place_block.y, hit.place_block.z, place_block);
+                    send_block_edit_update(hit.place_block.x, hit.place_block.y, hit.place_block.z, place_block); // send update to server
                 }
-                
             }
 
             // Toggle flying 
@@ -397,4 +398,17 @@ int main(void) {
         }
 
     }
+}
+void send_block_edit_update(int x, int y, int z, BlockType block) {
+    BlockEditPacket packet;
+    packet.type = PacketType::BlockEdit;
+    packet.player_id = my_player_id;
+
+    packet.x = x;
+    packet.y = y;
+    packet.z = z;
+    packet.block_type = block;
+
+    ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), 0);
+    enet_peer_send(peer, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
 }

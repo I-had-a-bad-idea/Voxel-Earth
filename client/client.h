@@ -38,4 +38,8 @@ struct RemotePlayer {
     glm::vec3 position;
 };
 
+ENetHost* client;
+ENetPeer* peer;
+
 std::vector<RemotePlayer> remote_players;
+void send_block_edit_update(int x, int y, int z, BlockType block);

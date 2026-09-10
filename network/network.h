@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <glm/vec3.hpp>
 
+#include "World/block.h"
+
 enum NetworkChannel {
     CHANNEL_RELIABLE = 0,
     CHANNEL_MOVEMENT = 1,
@@ -37,11 +39,13 @@ struct PlayerPositionPacket {
 struct BlockEditPacket {
     PacketType type;
 
+    uint32_t player_id;
+
     int32_t x;
     int32_t y;
     int32_t z;
 
-    uint8_t block_type;
+    BlockType block_type;
 };
 
 #pragma pack(pop)
