@@ -52,7 +52,7 @@ SHARED_SRC = \
 	$(wildcard network/*.cpp)
 
 SERVER_SRC = \
-	server/server.cpp
+	$(wildcard server/*.cpp)
 
 # Object files
 ENET_OBJ   = $(ENET_SRC:.c=.o)
