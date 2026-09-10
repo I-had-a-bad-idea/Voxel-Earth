@@ -25,9 +25,9 @@ struct WorldBlockPositionHash {
 };
 
 class ServerWorldState {
-    std::unordered_map<WorldBlockPosition, BlockType, WorldBlockPositionHash> blocks;
-
 public:
+    std::unordered_map<WorldBlockPosition, BlockType, WorldBlockPositionHash> blocks;
+    
     BlockType get_block(int x, int y, int z) const;
     void set_block(int x, int y, int z, BlockType block);
 };

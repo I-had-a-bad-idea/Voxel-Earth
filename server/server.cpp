@@ -18,11 +18,18 @@ int main(void) {
         return 1;
     }
 
+    load_world_state_from_file(world_state_filename);
+
     puts("Server running on port 7777");
 
     ENetEvent event;
 
     while (1) {
+        // Disable server when user wants to exit
+        if (GetAsyncKeyState(VK_ESCAPE)) {
+            break;
+        }
+
         while (enet_host_service(server, &event, 1000) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_CONNECT: {
@@ -108,8 +115,13 @@ int main(void) {
         }
     }
 
+    puts("Shutting down server...");
     enet_host_destroy(server);
     enet_deinitialize();
+    save_world_state_to_file(world_state_filename);
+
+    puts("Server shut down.");
+    return 0;
 }
 
 void broadcast_player_position_update(const Player& player) {
@@ -142,3 +154,47 @@ void broadcast_block_edit(int x, int y, int z, BlockType block, uint32_t player_
 
     enet_host_broadcast(server, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
 }
+
+void load_world_state_from_file(const std::string& filename) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        std::cerr << "Failed to open file for reading: " << filename << std::endl;
+        return;
+    }
+    // Read the number of blocks
+    uint32_t num_blocks;
+    file.read(reinterpret_cast<char*>(&num_blocks), sizeof(num_blocks));
+    // Read each block's position and type
+    for (uint32_t i = 0; i < num_blocks; ++i) {
+        WorldBlockPosition position;
+        BlockType block_type;
+        file.read(reinterpret_cast<char*>(&position.x), sizeof(position.x));
+        file.read(reinterpret_cast<char*>(&position.y), sizeof(position.y));
+        file.read(reinterpret_cast<char*>(&position.z), sizeof(position.z));
+        file.read(reinterpret_cast<char*>(&block_type), sizeof(block_type));
+        world_state.blocks[position] = block_type;
+    }
+    file.close();
+    std::cout << "World state loaded from " << filename << std::endl;
+}
+
+void save_world_state_to_file(const std::string& filename) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        return;
+    }
+    // Write the number of blocks
+    uint32_t num_blocks = static_cast<uint32_t>(world_state.blocks.size());
+    file.write(reinterpret_cast<const char*>(&num_blocks), sizeof(num_blocks));
+    // Write each block's position and type
+    for (const auto& [position, block_type] : world_state.blocks) {
+        file.write(reinterpret_cast<const char*>(&position.x), sizeof(position.x));
+        file.write(reinterpret_cast<const char*>(&position.y), sizeof(position.y));
+        file.write(reinterpret_cast<const char*>(&position.z), sizeof(position.z));
+        file.write(reinterpret_cast<const char*>(&block_type), sizeof(block_type));
+    }
+    file.close();
+    std::cout << "World state saved to " << filename << std::endl;
+}
+
