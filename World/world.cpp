@@ -241,6 +241,16 @@ void World::process_completed_chunks() { // on main thread
             continue;
         }
 
+        // Handle pending block edits for that chunk
+        if (auto pending = pending_block_edits.find(generated.pos); pending != pending_block_edits.end()) {
+            for (const PendingBlockEdit& edit : pending->second) {
+                it->second.set_block(edit.x, edit.y, edit.z, edit.block);
+            }
+            // Regenerate the mesh
+            generated.mesh_data = it->second.generate_mesh_data(generated.lod);
+            pending_block_edits.erase(pending); // And remove the pending block edits
+        }
+
         // create mesh and object
         Chunk& chunk = it->second;
         const ChunkLOD desired_lod = lod_for_chunk_distance(
@@ -614,6 +624,17 @@ void World::set_block(int x, int y, int z, BlockType block) {
     const ChunkPos pos {chunk_x, chunk_y, chunk_z};
 
     if (!chunks.contains(pos)) {
+        auto& pending_edits = pending_block_edits[pos]; // get existing PendingBlockEdits for that chunk
+        // Check if tthere already is an existing PendingBlockEdit for that position
+        auto existing = std::find_if(pending_edits.begin(), pending_edits.end(),
+            [block_x, block_y, block_z](const PendingBlockEdit& edit) {
+                return edit.x == block_x && edit.y == block_y && edit.z == block_z;
+            });
+        if (existing != pending_edits.end()) {
+            existing->block = block; // if yes replace it
+        } else {
+            pending_edits.push_back({block_x, block_y, block_z, block}); // if no add a new one
+        }
         return;
     }
 

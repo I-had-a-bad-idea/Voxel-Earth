@@ -76,6 +76,13 @@ class World {
         MeshData mesh_data;
     };
 
+    struct PendingBlockEdit {
+        int x;
+        int y;
+        int z;
+        BlockType block;
+    };
+
     Renderer& renderer;
     Scene scene;
 
@@ -89,6 +96,7 @@ class World {
     std::unique_ptr<Material> atlas_material;
     
     std::unordered_map<ChunkPos, Chunk, ChunkPosHash> chunks;
+    std::unordered_map<ChunkPos, std::vector<PendingBlockEdit>, ChunkPosHash> pending_block_edits;
     
     Noise temperature;
     Noise moisture;
