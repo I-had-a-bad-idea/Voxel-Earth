@@ -46,30 +46,55 @@ int main(void) {
                     break;
                 }
                     case ENET_EVENT_TYPE_RECEIVE: {
-                        if (event.packet->dataLength >= sizeof(PlayerPositionPacket)) {
+                        if (event.packet->dataLength >= sizeof(PacketType)) {
                             PacketType type = *(PacketType *)event.packet->data;
 
-                            if (type == PacketType::PlayerPosition) {
-                                PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
+                            switch (type) {
+                                case PacketType::PlayerPosition: {
+                                    if (event.packet->dataLength < sizeof(PlayerPositionPacket)) break;
 
-                                uint32_t player_id = *(uint32_t *)event.peer->data;
-                                uint32_t packet_player_id = packet->player_id;
+                                    PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
 
-                                if (player_id != packet_player_id) {
-                                    break; // ignore, someone is trying to do nonsense
+                                    uint32_t player_id = *(uint32_t *)event.peer->data;
+                                    uint32_t packet_player_id = packet->player_id;
+
+                                    if (player_id != packet_player_id) {
+                                        break; // ignore, someone is trying to do nonsense
+                                    }
+                                    // Update player positon
+                                    for (Player& player : players) {
+                                        if (player.id == player_id) {
+                                            player.position = glm::vec3(packet->x, packet->y, packet->z);
+
+                                            broadcast_player_position_update(player); // tell clients to update this player position
+                                            break;
+                                        }
+                                    }
+                                    break;
                                 }
-                                // Update player positon
-                                for (Player& player : players) {
-                                    if (player.id == player_id) {
-                                        player.position = glm::vec3(packet->x, packet->y, packet->z);
-                                        
-                                        broadcast_player_position_update(player); // tell clients to update this player position
+                                case PacketType::BlockEdit: {
+                                    if (event.packet->dataLength < sizeof(BlockEditPacket)) break;
+
+                                    BlockEditPacket *packet = (BlockEditPacket *)event.packet->data;
+
+                                    uint32_t player_id = *(uint32_t *)event.peer->data;
+                                    uint32_t packet_player_id = packet->player_id;
+
+                                    if (player_id != packet_player_id) {
+                                        break; // ignore, someone is trying to do nonsense
+                                    }
+
+                                    // Ignore blocks, that are outside valid range of block types
+                                    if (packet->block_type < BlockType::Air || packet->block_type > BlockType::Leaves) {
                                         break;
                                     }
+
+                                    world_state.set_block(packet->x, packet->y, packet->z, packet->block_type);
+                                    broadcast_blcok_edit(packet->x, packet->y, packet->z, packet->block_type, player_id);
+                                    break;
                                 }
                             }
                         }
-
                         enet_packet_destroy(event.packet);
                         break;
                     }
@@ -100,4 +125,20 @@ void broadcast_player_position_update(const Player& player) {
     ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), 0);
 
     enet_host_broadcast(server, NetworkChannel::CHANNEL_MOVEMENT, enet_packet);
+}
+
+void broadcast_blcok_edit(int x, int y, int z, BlockType block, uint32_t player_id) {
+    BlockEditPacket packet;
+
+    packet.type = PacketType::BlockEdit;
+    packet.player_id = player_id;
+    
+    packet.x = x;
+    packet.y = y;
+    packet.z = z;
+    packet.block_type = block;
+
+    ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
+
+    enet_host_broadcast(server, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
 }

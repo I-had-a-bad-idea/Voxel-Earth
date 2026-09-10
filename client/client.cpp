@@ -409,6 +409,6 @@ void send_block_edit_update(int x, int y, int z, BlockType block) {
     packet.z = z;
     packet.block_type = block;
 
-    ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), 0);
+    ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
     enet_peer_send(peer, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
 }
