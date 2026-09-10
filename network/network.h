@@ -13,26 +13,32 @@ enum class PacketType : uint8_t {
     PlayerList           = 2,
     BlockEdit            = 3,
     ChunkData            = 4,
-    AssingPlayerIdPacket = 5,
+    AssingPlayerId = 5,
     PlayerDisconnected   = 6,
 };
 
+constexpr uint16_t PROTOCOL_VERSION = 1;
+
+struct PacketHeader {
+    PacketType type;
+    uint16_t protocol_version;
+};
 
 
 #pragma pack(push, 1)
 
 struct AssignPlayerIdPacket {
-    PacketType type;
+    PacketHeader header;
     uint32_t player_id;
 };
 
 struct PlayerDisconnectedPacket {
-    PacketType type;
+    PacketHeader header;
     uint32_t player_id;
 };
 
 struct PlayerPositionPacket {
-    PacketType type;
+    PacketHeader header;
     uint32_t player_id;
 
     float x;
@@ -41,7 +47,7 @@ struct PlayerPositionPacket {
 };
 
 struct BlockEditPacket {
-    PacketType type;
+    PacketHeader header;
 
     uint32_t player_id;
 

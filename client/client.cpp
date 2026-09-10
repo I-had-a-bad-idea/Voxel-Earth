@@ -112,9 +112,16 @@ int main(void) {
         switch (event.type) {
             case ENET_EVENT_TYPE_RECEIVE: {
                 if (event.packet->dataLength >= sizeof(AssignPlayerIdPacket)) {
-                    PacketType type = *(PacketType *)event.packet->data;
+                    PacketHeader* header = reinterpret_cast<PacketHeader*>(event.packet->data);
 
-                    if (type == PacketType::AssingPlayerIdPacket) {
+                    if (header->protocol_version != PROTOCOL_VERSION) {
+                        printf("Server has incompatible protocol version: %u\n", header->protocol_version);
+                        enet_host_destroy(client);
+                        enet_deinitialize();
+                        return 1;
+                    }
+
+                    if (header->type == PacketType::AssingPlayerId) {
                         AssignPlayerIdPacket *packet = (AssignPlayerIdPacket *)event.packet->data;
                         my_player_id = packet->player_id;
 
@@ -339,7 +346,8 @@ int main(void) {
             network_timer = 0.0f;
             // Send position to server
             PlayerPositionPacket packet;
-            packet.type = PacketType::PlayerPosition;
+            packet.header.type = PacketType::PlayerPosition;
+            packet.header.protocol_version = PROTOCOL_VERSION;
             packet.player_id = my_player_id;
 
             packet.x = scene.cam_pos.x;
@@ -354,10 +362,17 @@ int main(void) {
         while (enet_host_service(client, &event, 0) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_RECEIVE: {
-                    if (event.packet->dataLength >= sizeof(PacketType)) {
-                        PacketType type = *(PacketType *)event.packet->data;
+                    if (event.packet->dataLength >= sizeof(PacketHeader)) {
+                        PacketHeader* header = reinterpret_cast<PacketHeader*>(event.packet->data);
 
-                        switch (type) {
+                        if (header->protocol_version != PROTOCOL_VERSION) {
+                            printf("Server has incompatible protocol version: %u\n", header->protocol_version);
+                            enet_host_destroy(client);
+                            enet_deinitialize();
+                            return 1;
+                        }
+
+                        switch (header->type) {
                             case PacketType::PlayerPosition: {
                                 if (event.packet->dataLength < sizeof(PlayerPositionPacket)) break;
                                 PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
@@ -432,7 +447,8 @@ int main(void) {
 }
 void send_block_edit_update(int x, int y, int z, BlockType block) {
     BlockEditPacket packet;
-    packet.type = PacketType::BlockEdit;
+    packet.header.type = PacketType::BlockEdit;
+    packet.header.protocol_version = PROTOCOL_VERSION;
     packet.player_id = my_player_id;
 
     packet.x = x;

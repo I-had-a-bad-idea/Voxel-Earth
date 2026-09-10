@@ -42,7 +42,8 @@ int main(void) {
                     players.push_back(player);
 
                     AssignPlayerIdPacket packet;
-                    packet.type = PacketType::AssingPlayerIdPacket;
+                    packet.header.type = PacketType::AssingPlayerId;
+                    packet.header.protocol_version = PROTOCOL_VERSION;
                     packet.player_id = player.id;
 
                     ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
@@ -54,16 +55,22 @@ int main(void) {
                     break;
                 }
                     case ENET_EVENT_TYPE_RECEIVE: {
-                        if (event.packet->dataLength >= sizeof(PacketType)) {
-                            PacketType type = *(PacketType *)event.packet->data;
+                        if (event.packet->dataLength >= sizeof(PacketHeader)) {
+                            PacketHeader* header = reinterpret_cast<PacketHeader*>(event.packet->data);
 
-                            switch (type) {
+                            uint32_t player_id = *(uint32_t *)event.peer->data;
+
+                            if (header->protocol_version != PROTOCOL_VERSION) {
+                                printf("Client %u has incompatible protocol version: %u\n", player_id, header->protocol_version);
+                                enet_peer_disconnect(event.peer, 0);
+                                break;
+                            }
+                            switch (header->type) {
                                 case PacketType::PlayerPosition: {
                                     if (event.packet->dataLength < sizeof(PlayerPositionPacket)) break;
 
                                     PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
 
-                                    uint32_t player_id = *(uint32_t *)event.peer->data;
                                     uint32_t packet_player_id = packet->player_id;
 
                                     if (player_id != packet_player_id) {
@@ -85,7 +92,6 @@ int main(void) {
 
                                     BlockEditPacket *packet = (BlockEditPacket *)event.packet->data;
 
-                                    uint32_t player_id = *(uint32_t *)event.peer->data;
                                     uint32_t packet_player_id = packet->player_id;
 
                                     if (player_id != packet_player_id) {
@@ -130,7 +136,8 @@ int main(void) {
 void broadcast_player_position_update(const Player& player) {
     PlayerPositionPacket packet;
 
-    packet.type = PacketType::PlayerPosition;
+    packet.header.type = PacketType::PlayerPosition;
+    packet.header.protocol_version = PROTOCOL_VERSION;
     packet.player_id = player.id;
 
     packet.x = player.position.x;
@@ -145,7 +152,8 @@ void broadcast_player_position_update(const Player& player) {
 void broadcast_block_edit(int x, int y, int z, BlockType block, uint32_t player_id) {
     BlockEditPacket packet;
 
-    packet.type = PacketType::BlockEdit;
+    packet.header.type = PacketType::BlockEdit;
+    packet.header.protocol_version = PROTOCOL_VERSION;
     packet.player_id = player_id;
     
     packet.x = x;
@@ -161,7 +169,8 @@ void broadcast_block_edit(int x, int y, int z, BlockType block, uint32_t player_
 void send_world_state(ENetPeer* peer) {
     for (const auto& [position, block_type] : world_state.blocks) {
         BlockEditPacket packet;
-        packet.type = PacketType::BlockEdit;
+        packet.header.type = PacketType::BlockEdit;
+        packet.header.protocol_version = PROTOCOL_VERSION;
         packet.player_id = UINT32_MAX;
         packet.x = position.x;
         packet.y = position.y;
@@ -180,7 +189,8 @@ void send_world_state(ENetPeer* peer) {
 void broadcast_player_disconnected(const uint32_t player_id) {
     PlayerDisconnectedPacket packet;
 
-    packet.type = PacketType::PlayerDisconnected;
+    packet.header.type = PacketType::PlayerDisconnected;
+    packet.header.protocol_version = PROTOCOL_VERSION;
     packet.player_id = player_id;
     
     ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
