@@ -48,6 +48,7 @@ int main(void) {
                     ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
 
                     enet_peer_send(event.peer, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
+                    send_world_state(event.peer);
 
                     printf("Player %u connected\n", player.id);
                     break;
@@ -155,6 +156,25 @@ void broadcast_block_edit(int x, int y, int z, BlockType block, uint32_t player_
     ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
 
     enet_host_broadcast(server, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
+}
+
+void send_world_state(ENetPeer* peer) {
+    for (const auto& [position, block_type] : world_state.blocks) {
+        BlockEditPacket packet;
+        packet.type = PacketType::BlockEdit;
+        packet.player_id = UINT32_MAX;
+        packet.x = position.x;
+        packet.y = position.y;
+        packet.z = position.z;
+        packet.block_type = block_type;
+
+        ENetPacket* enet_packet = enet_packet_create(
+            &packet,
+            sizeof(packet),
+            ENET_PACKET_FLAG_RELIABLE
+        );
+        enet_peer_send(peer, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
+    }
 }
 
 void broadcast_player_disconnected(const uint32_t player_id) {

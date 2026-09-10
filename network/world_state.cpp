@@ -11,10 +11,5 @@ BlockType ServerWorldState::get_block(int x, int y, int z) const {
 
 void ServerWorldState::set_block(int x, int y, int z, BlockType block) {
     const WorldBlockPosition position{x, y, z};
-    if (block == BlockType::Air) {
-        blocks.erase(position);
-        return;
-    }
-
     blocks.insert_or_assign(position, block);
 }
