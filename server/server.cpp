@@ -90,7 +90,7 @@ int main(void) {
                                     }
 
                                     world_state.set_block(packet->x, packet->y, packet->z, packet->block_type);
-                                    broadcast_blcok_edit(packet->x, packet->y, packet->z, packet->block_type, player_id);
+                                    broadcast_block_edit(packet->x, packet->y, packet->z, packet->block_type, player_id);
                                     break;
                                 }
                             }
@@ -127,7 +127,7 @@ void broadcast_player_position_update(const Player& player) {
     enet_host_broadcast(server, NetworkChannel::CHANNEL_MOVEMENT, enet_packet);
 }
 
-void broadcast_blcok_edit(int x, int y, int z, BlockType block, uint32_t player_id) {
+void broadcast_block_edit(int x, int y, int z, BlockType block, uint32_t player_id) {
     BlockEditPacket packet;
 
     packet.type = PacketType::BlockEdit;

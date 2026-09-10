@@ -354,34 +354,46 @@ int main(void) {
         while (enet_host_service(client, &event, 0) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_RECEIVE: {
-                    if (event.packet->dataLength >= sizeof(PlayerPositionPacket)) {
+                    if (event.packet->dataLength >= sizeof(PacketType)) {
                         PacketType type = *(PacketType *)event.packet->data;
 
-                        if (type == PacketType::PlayerPosition) {
-                            PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
-                            
-                            if (packet->player_id == my_player_id) {
-                                enet_packet_destroy(event.packet);
-                                break;
-                            }
-                            bool found = false;
-                            for (auto& player : remote_players)  {
-                                if (player.id == packet->player_id) {
-                                    player.position = glm::vec3(packet->x, packet->y, packet->z);
-                                    found = true;
-                                    world.update_player_object(player.id, player.position);
+                        switch (type) {
+                            case PacketType::PlayerPosition: {
+                                if (event.packet->dataLength < sizeof(PlayerPositionPacket)) break;
+                                PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
+                                
+                                if (packet->player_id == my_player_id) {
                                     break;
                                 }
+                                bool found = false;
+                                for (auto& player : remote_players)  {
+                                    if (player.id == packet->player_id) {
+                                        player.position = glm::vec3(packet->x, packet->y, packet->z);
+                                        found = true;
+                                        world.update_player_object(player.id, player.position);
+                                        break;
+                                    }
+                                }
+                                if (found) {
+                                    break;
+                                }
+                                // Add player if not found
+                                remote_players.push_back({packet->player_id, glm::vec3(packet->x, packet->y, packet->z)});
+                                world.add_player_object(packet->player_id, glm::vec3(packet->x, packet->y, packet->z));
                             }
-                            if (found) {
-                                break;
+                            case PacketType::BlockEdit: {
+                                if (event.packet->dataLength < sizeof(BlockEditPacket)) break;
+                                BlockEditPacket *packet = (BlockEditPacket *)event.packet->data;
+                                
+                                if (packet->player_id == my_player_id) {
+                                    break;
+                                }
+
+                                world.set_block(packet->x, packet->y, packet->z, packet->block_type);
                             }
-                            // Add player if not found
-                            remote_players.push_back({packet->player_id, glm::vec3(packet->x, packet->y, packet->z)});
-                            world.add_player_object(packet->player_id, glm::vec3(packet->x, packet->y, packet->z));
                         }
                     }
-                    
+
                     enet_packet_destroy(event.packet);
                     break;
                 }
