@@ -44,11 +44,10 @@ ENET_SRC = \
 
 CLIENT_SRC = \
 	$(wildcard client/*.cpp) \
-	$(wildcard client/World-Scene/*.cpp)
+	$(wildcard World/*.cpp) \
 
 SHARED_SRC = \
 	$(wildcard Math/*.cpp) \
-	$(wildcard World/*.cpp) \
 	$(wildcard network/*.cpp)
 
 SERVER_SRC = \
