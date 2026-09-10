@@ -44,19 +44,20 @@ ENET_SRC = \
 
 CLIENT_SRC = \
 	$(wildcard client/*.cpp) \
-	$(wildcard client/World-Scene/*.cpp)
+	$(wildcard World/*.cpp) \
 
 SHARED_SRC = \
-	$(wildcard Math/*.cpp)
+	$(wildcard Math/*.cpp) \
+	$(wildcard network/*.cpp)
 
 SERVER_SRC = \
-	server/server.c
+	$(wildcard server/*.cpp)
 
 # Object files
 ENET_OBJ   = $(ENET_SRC:.c=.o)
 CLIENT_OBJ = $(CLIENT_SRC:.cpp=.o)
 SHARED_OBJ = $(SHARED_SRC:.cpp=.o)
-SERVER_OBJ = $(SERVER_SRC:.c=.o)
+SERVER_OBJ = $(SERVER_SRC:.cpp=.o)
 
 CLIENT_DEPS = $(CLIENT_OBJ:.o=.d) $(SHARED_OBJ:.o=.d) $(ENET_OBJ:.o=.d)
 SERVER_DEPS = $(SERVER_OBJ:.o=.d) $(SHARED_OBJ:.o=.d) $(ENET_OBJ:.o=.d)
@@ -68,7 +69,7 @@ all: server.exe client.exe
 
 
 server.exe: $(SERVER_OBJ) $(SHARED_OBJ) $(ENET_OBJ)
-	$(CC) $^ $(LIBS) -O2 -o $@
+	$(CXX) $^ $(LIBS) -o $@
 
 
 client.exe: $(CLIENT_OBJ) $(SHARED_OBJ) $(ENET_OBJ)

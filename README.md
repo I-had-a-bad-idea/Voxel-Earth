@@ -1,7 +1,7 @@
 # Voxel-Earth
 
 Multiplayer voxel game, that uses real-world height data.   
-Basically a voxel game, but the world is the Earth.
+Basically a voxel game, but the world is the Earth and you can play with your friends on it.
 
 ## Compilation
 ### Building curl (once)
@@ -43,7 +43,17 @@ Run:
 make
 ```
 
-You will have a `client.exe` and a `server.exe`
+You will have a `client.exe` and a `server.exe`.
+
+
+## Running
+
+1. [Compile the project](#compilation)
+2. Execute the `server.exe` and keep it open
+3. Execute the `client.exe`
+4. Tell your friend to execute the `client.exe`
+5. (See that he cant connect because currently servers are only locally)
+6. End client/server with `Esc` (never just close the server or you might lose the changes made to the world)
 
 ## Licenses
 [Terrain Tiles License](./TERRAIN_TILES_ATTRIBUTION.md)

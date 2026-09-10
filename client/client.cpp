@@ -1,23 +1,6 @@
 #define SDL_MAIN_HANDLED
 
-#include <enet/enet.h>
-#include <SDL3/SDL.h>
-#include <VGL/renderer.h>
-#include <stdio.h>
-#include "World-Scene/world.h"
-
-constexpr float max_block_look_distance = 5.0f; // distance at which a block can be looked at / modified
-constexpr float move_speed = 15.0f; // blocks/sec
-constexpr float ground_acceleration = 80.0f; // blocks / s^2
-constexpr float air_acceleration = 20.0f; // blocks / s^2
-constexpr float mouse_sensitivity = 0.0025f;
-constexpr float gravity_acceleration = 5.0f; // blocks / s^2
-constexpr float jump_velocity = 3.0f;
-constexpr float friction = 30.0f; // currently a flat value (TODO: make friction block dependent)
-constexpr float player_height = 1.0f; 
-constexpr float step_size = 0.05f;
-constexpr float player_half_width = 0.3f;
-constexpr float overlap_epsilon = 0.0001f;
+#include "client.h"
 
 glm::vec3 vector_collides_with_block(World& world, const glm::vec3& start, const glm::vec3& vector) {
 
@@ -88,10 +71,6 @@ BlockHit get_block_looked_at(World& world, const glm::vec3& look_direction) {
 }
 
 int main(void) {
-    // Define window size
-    int width = 960;
-    int height = 540;
-
     // Create renderer
     Renderer renderer("Voxel Earth", width, height, true, nullptr, false, 0);
 
@@ -101,16 +80,70 @@ int main(void) {
     world.setup();
     Scene& scene = world.get_scene();
 
-    glm::vec3 camera_velocity(0.0f);
-    float pitch = 0.0f;
-    bool fly {false};
+    std::cout << "Connecting to server...\n";
+    if (enet_initialize() != 0)
+    {
+        puts("Couldn't initialize ENet");
+        return 1;
+    }
+
+    client = enet_host_create(NULL, 1, 2, 0, 0);
+
+    ENetAddress address;
+    enet_address_set_host(&address, "127.0.0.1");
+    address.port = 7777;
+
+    peer = enet_host_connect(client, &address, 2, 0);
+    ENetEvent event;
+
+    if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
+        puts("Connected!");
+    } else {
+        puts("Connection failed");
+        return 1;
+    }
+    bool got_player_id = false;
+    while (!got_player_id) {
+        if (enet_host_service(client, &event, 5000) <= 0) {
+            puts("Didn't receive player ID");
+            return 1;
+        }
+
+        switch (event.type) {
+            case ENET_EVENT_TYPE_RECEIVE: {
+                if (event.packet->dataLength >= sizeof(AssignPlayerIdPacket)) {
+                    PacketHeader* header = reinterpret_cast<PacketHeader*>(event.packet->data);
+
+                    if (header->protocol_version != PROTOCOL_VERSION) {
+                        printf("Server has incompatible protocol version: %u\n", header->protocol_version);
+                        enet_host_destroy(client);
+                        enet_deinitialize();
+                        return 1;
+                    }
+
+                    if (header->type == PacketType::AssingPlayerId) {
+                        AssignPlayerIdPacket *packet = (AssignPlayerIdPacket *)event.packet->data;
+                        my_player_id = packet->player_id;
+
+                        printf("Connected as player %u\n", my_player_id);
+                        got_player_id = true;
+                    }
+                }
+
+                enet_packet_destroy(event.packet);
+                break;
+            }
+
+            case ENET_EVENT_TYPE_DISCONNECT:
+                puts("Disconnected before receiving player ID");
+                return 1;
+
+            default:
+                break;
+        }
+    }
 
     std::cout << "Starting rendering..." << std::endl;
-    uint64_t last_time {SDL_GetTicks()}; // this is only FPS metrics related stuff
-    uint64_t fps_update_time {last_time};
-    uint32_t frame_count {0};
-    bool quit{ false };
-
     while (!quit) {
         uint64_t now = SDL_GetTicks();
         float elapsed_time {(now - last_time) / 1000.0f};
@@ -237,8 +270,6 @@ int main(void) {
             scene.cam_pos += desired_movement;
         }
 
-
-
         if (keys[SDL_SCANCODE_ESCAPE]) {
             quit = true;
         }
@@ -278,6 +309,7 @@ int main(void) {
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                 // Placing / Breaking
                 BlockHit hit = get_block_looked_at(world, camera_view_direction);
+                BlockType place_block = BlockType::Stone; // TODO: Make placed block choosable
 
                 if (!hit.found) {
                     continue;
@@ -285,13 +317,13 @@ int main(void) {
                 if (event.button.button == SDL_BUTTON_LEFT) {
                     // Break block
                     world.set_block(hit.block.x, hit.block.y, hit.block.z, BlockType::Air);
+                    send_block_edit_update(hit.block.x, hit.block.y, hit.block.z, BlockType::Air); // send update to server
                 }
                 if (event.button.button == SDL_BUTTON_RIGHT) {
                     // Place block (directly infront of the block looked at)
-                    world.set_block(hit.place_block.x, hit.place_block.y, hit.place_block.z, BlockType::Stone);
-                    // TODO: Make placed block choosable
+                    world.set_block(hit.place_block.x, hit.place_block.y, hit.place_block.z, place_block);
+                    send_block_edit_update(hit.place_block.x, hit.place_block.y, hit.place_block.z, place_block); // send update to server
                 }
-                
             }
 
             // Toggle flying 
@@ -307,65 +339,101 @@ int main(void) {
                 }
             }
         }
-    }
-    
-    if (enet_initialize() != 0)
-    {
-        puts("Couldn't initialize ENet");
-        return 1;
-    }
+        //// Networking
+        network_timer += elapsed_time;
+        
+        if (network_timer >= 0.05f) { // only send positon every 50ms
+            network_timer = 0.0f;
+            // Send position to server
+            PlayerPositionPacket packet;
+            packet.header.type = PacketType::PlayerPosition;
+            packet.header.protocol_version = PROTOCOL_VERSION;
+            packet.player_id = my_player_id;
 
-    ENetHost *client =
-        enet_host_create(NULL, 1, 2, 0, 0);
+            packet.x = scene.cam_pos.x;
+            packet.y = scene.cam_pos.y;
+            packet.z = scene.cam_pos.z;
 
-    ENetAddress address;
-    enet_address_set_host(&address, "127.0.0.1");
-    address.port = 7777;
+            ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), 0);
+            enet_peer_send(peer, NetworkChannel::CHANNEL_MOVEMENT, enet_packet);
+        }
 
-    ENetPeer *peer =
-        enet_host_connect(client, &address, 2, 0);
 
-    ENetEvent event;
+        while (enet_host_service(client, &event, 0) > 0) {
+            switch (event.type) {
+                case ENET_EVENT_TYPE_RECEIVE: {
+                    if (event.packet->dataLength >= sizeof(PacketHeader)) {
+                        PacketHeader* header = reinterpret_cast<PacketHeader*>(event.packet->data);
 
-    if (enet_host_service(client, &event, 5000) > 0 &&
-        event.type == ENET_EVENT_TYPE_CONNECT)
-    {
-        puts("Connected!");
+                        if (header->protocol_version != PROTOCOL_VERSION) {
+                            printf("Server has incompatible protocol version: %u\n", header->protocol_version);
+                            enet_host_destroy(client);
+                            enet_deinitialize();
+                            return 1;
+                        }
 
-        ENetPacket *packet =
-            enet_packet_create(
-                "Hello from client!",
-                19,
-                ENET_PACKET_FLAG_RELIABLE);
+                        switch (header->type) {
+                            case PacketType::PlayerPosition: {
+                                if (event.packet->dataLength < sizeof(PlayerPositionPacket)) break;
+                                PlayerPositionPacket *packet = (PlayerPositionPacket *)event.packet->data;
+                                
+                                if (packet->player_id == my_player_id) {
+                                    break;
+                                }
+                                bool found = false;
+                                for (auto& player : remote_players)  {
+                                    if (player.id == packet->player_id) {
+                                        player.position = glm::vec3(packet->x, packet->y, packet->z);
+                                        found = true;
+                                        world.update_player_object(player.id, player.position);
+                                        break;
+                                    }
+                                }
+                                if (found) {
+                                    break;
+                                }
+                                // Add player if not found
+                                remote_players.push_back({packet->player_id, glm::vec3(packet->x, packet->y, packet->z)});
+                                world.add_player_object(packet->player_id, glm::vec3(packet->x, packet->y, packet->z));
+                            }
+                            case PacketType::BlockEdit: {
+                                if (event.packet->dataLength < sizeof(BlockEditPacket)) break;
+                                BlockEditPacket *packet = (BlockEditPacket *)event.packet->data;
+                                
+                                if (packet->player_id == my_player_id) {
+                                    break;
+                                }
 
-        enet_peer_send(peer, 0, packet);
-        enet_host_flush(client);
-    }
-    else
-    {
-        puts("Connection failed");
-        return 1;
-    }
+                                world.set_block(packet->x, packet->y, packet->z, packet->block_type);
+                                break;
+                            }
+                            case PacketType::PlayerDisconnected: {
+                                if (event.packet->dataLength < sizeof(PlayerDisconnectedPacket)) break;
 
-    while (1)
-    {
-        while (enet_host_service(client, &event, 1000) > 0)
-        {
-            switch (event.type)
-            {
-                case ENET_EVENT_TYPE_RECEIVE:
-                    printf("Server says: %s\n",
-                           (char *)event.packet->data);
+                                PlayerDisconnectedPacket *packet = (PlayerDisconnectedPacket *)event.packet->data;
+
+                                uint32_t player_id = packet->player_id;
+                                std::cout << "Player " << player_id << " disconnected" << std::endl;
+                                // Remove player from remote_players
+                                auto it = std::remove_if(remote_players.begin(), remote_players.end(),
+                                    [player_id](const RemotePlayer& player) {
+                                        return player.id == player_id;
+                                    });
+                                if (it != remote_players.end()) {
+                                    world.remove_player_object(player_id);
+                                    remote_players.erase(it, remote_players.end());
+                                }
+                                break;
+                            }
+                        }
+                    }
 
                     enet_packet_destroy(event.packet);
-
-                    enet_peer_disconnect(peer, 0);
                     break;
-
+                }
                 case ENET_EVENT_TYPE_DISCONNECT:
                     puts("Disconnected");
-                    enet_host_destroy(client);
-                    enet_deinitialize();
+                    quit = true;
                     // return 0;
                     break;
 
@@ -374,4 +442,20 @@ int main(void) {
             }
         }
     }
+    enet_host_destroy(client);
+    enet_deinitialize();
+}
+void send_block_edit_update(int x, int y, int z, BlockType block) {
+    BlockEditPacket packet;
+    packet.header.type = PacketType::BlockEdit;
+    packet.header.protocol_version = PROTOCOL_VERSION;
+    packet.player_id = my_player_id;
+
+    packet.x = x;
+    packet.y = y;
+    packet.z = z;
+    packet.block_type = block;
+
+    ENetPacket* enet_packet = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
+    enet_peer_send(peer, NetworkChannel::CHANNEL_RELIABLE, enet_packet);
 }
