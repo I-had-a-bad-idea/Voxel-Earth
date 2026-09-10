@@ -1,9 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <glm/vec3.hpp>
-
-#include "World/block.h"
+#include "World/block_types.h"
 
 enum NetworkChannel {
     CHANNEL_RELIABLE = 0,

@@ -4,18 +4,7 @@
 
 #include <VGL/object.h>
 
-enum class BlockType : char {
-    Air,
-    Stone,
-    Dirt,
-    Grass,
-    Sand,
-    Water,
-    Snow,
-    Gravel,
-    Wood,
-    Leaves,
-};
+#include "block_types.h"
 
 struct AtlasTile { // (0, 0) is top left
     uint32_t x;
