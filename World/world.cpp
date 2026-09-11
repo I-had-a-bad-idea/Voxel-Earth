@@ -217,7 +217,7 @@ void World::process_completed_chunks() { // on main thread
 
     // Keep generation from building an unbounded queue while allowing the
     // initial visible area to stream in at several chunks per frame.
-    while (uploaded_chunks < 8) {
+    while (uploaded_chunks < 16) {
         {
             std::lock_guard lock(generation_mutex);
             if (completed_chunks.empty()) {

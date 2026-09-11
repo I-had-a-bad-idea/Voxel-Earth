@@ -25,7 +25,7 @@ constexpr float player_height = 1.0f;
 constexpr float player_half_width = 0.3f;
 
 
-constexpr int MAX_NEW_REQUESTS_PER_FRAME = 8;
+constexpr int MAX_NEW_REQUESTS_PER_FRAME = 16;
 
 constexpr int RENDER_DISTANCE = 35;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
