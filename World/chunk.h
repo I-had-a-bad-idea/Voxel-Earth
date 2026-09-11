@@ -50,6 +50,7 @@ class Chunk {
     int chunk_z;
     std::vector<BlockType> blocks;
     std::vector<uint8_t> column_tops;
+    bool has_blocks = false;
     // the highest block in each collum (used to be mroe efficient when doing stuff (e.g. generating mesh))
 
     public:
@@ -74,6 +75,10 @@ class Chunk {
         
         inline void set_block(int x, int y, int z, BlockType block) {
             blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)] = block;
+
+            if (block != BlockType::Air) {
+                has_blocks = true;
+            }
             
             int column_index = x + CHUNK_SIZE_X * z;
             

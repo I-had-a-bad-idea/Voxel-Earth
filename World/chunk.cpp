@@ -27,6 +27,10 @@ Chunk::Chunk(const std::vector<TerrainColumn>& terrain_columns,
             const int world_y_base = chunk_y * CHUNK_SIZE_Y;
             int local_top = -1;
 
+            if (world_y_base > std::max(height, SEA_LEVEL)) {
+                continue;
+            }
+
             for (int local_y = 0; local_y < CHUNK_SIZE_Y; ++local_y) {
                 const int world_y = world_y_base + local_y;
                 BlockType type = BlockType::Air;
@@ -53,8 +57,9 @@ Chunk::Chunk(const std::vector<TerrainColumn>& terrain_columns,
                 }
 
                 if (type != BlockType::Air) {
-                    set_block(x, local_y, z, type);
+                    blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * local_y)] = type;
                     local_top = local_y;
+                    has_blocks = true;
                 }
             }
 
@@ -64,6 +69,9 @@ Chunk::Chunk(const std::vector<TerrainColumn>& terrain_columns,
 }
 
 MeshData Chunk::generate_mesh_data(ChunkLOD requested_lod) {
+    if (!has_blocks) {
+        return {};
+    }
     return generate_mesh_data(blocks, requested_lod);
 }
 
