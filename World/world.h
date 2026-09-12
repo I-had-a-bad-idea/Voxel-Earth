@@ -103,6 +103,11 @@ class World {
     std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
     std::unordered_map<TileCoordinate, ElevationTile, TileCoordinateHash> elevation_tiles;
     std::mutex terrain_cache_mutex;
+    std::condition_variable elevation_tile_condition;
+    std::queue<TileCoordinate> elevation_tile_queue;
+    std::unordered_set<TileCoordinate, TileCoordinateHash> requested_elevation_tiles;
+    std::thread elevation_tile_thread;
+    bool stop_elevation_tile_thread = false;
 
 
     std::vector<ChunkPos> new_requests;
@@ -132,11 +137,12 @@ class World {
 
     void generate_chunks();
     void update_chunk_meshes();
+    void fetch_elevation_tiles();
     TerrainColumn generate_terrain_column(int world_x, int world_z);
     std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
-    float get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, int pixel_y);
+    float get_elevation_height(TileCoordinate coord, int pixel_x, int pixel_y);
 
     public:
         World(Renderer& renderer_);

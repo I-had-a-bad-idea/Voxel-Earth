@@ -31,6 +31,7 @@ World::World(Renderer& renderer_)
       temperature(3456, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
       moisture(7890, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm)
 {
+    elevation_tile_thread = std::thread(&World::fetch_elevation_tiles, this);
     generation_thread = std::thread(&World::generate_chunks, this);
     mesh_update_thread = std::thread(&World::update_chunk_meshes, this);
 }
@@ -44,11 +45,52 @@ World::~World() {
     generation_thread.join();
 
     {
+        std::lock_guard lock(terrain_cache_mutex);
+        stop_elevation_tile_thread = true;
+    }
+    elevation_tile_condition.notify_one();
+    elevation_tile_thread.join();
+
+    {
         std::lock_guard lock(mesh_update_mutex);
         stop_mesh_updates = true;
     }
     mesh_update_condition.notify_one();
     mesh_update_thread.join();
+}
+
+void World::fetch_elevation_tiles() {
+    while (true) {
+        TileCoordinate coord;
+        {
+            std::unique_lock lock(terrain_cache_mutex);
+            elevation_tile_condition.wait(lock, [this] {
+                return stop_elevation_tile_thread || !elevation_tile_queue.empty();
+            });
+
+            if (stop_elevation_tile_thread && elevation_tile_queue.empty()) {
+                return;
+            }
+
+            coord = elevation_tile_queue.front();
+            elevation_tile_queue.pop();
+        }
+
+        ElevationTile tile_data;
+        try {
+            tile_data = elevation_tile_fetcher.elevation_tile_fetch(ELEVATION_ZOOM, coord.x, coord.y);
+        } catch (const std::exception& error) {
+            std::cerr << "Failed to load elevation tile " << coord.x << ", " << coord.y
+                      << ": " << error.what() << ". Using sea level.\n";
+        }
+
+        {
+            std::lock_guard lock(terrain_cache_mutex);
+            elevation_tiles.emplace(coord, std::move(tile_data));
+            requested_elevation_tiles.erase(coord);
+        }
+        elevation_tile_condition.notify_all();
+    }
 }
 
 void World::generate_chunks() {
@@ -121,25 +163,19 @@ void World::update_chunk_meshes() {
     }
 }
 
-float World::get_elevation_height(int zoom, TileCoordinate coord, int pixel_x, int pixel_y) {
-    {
-        std::lock_guard lock(terrain_cache_mutex);
-        auto it = elevation_tiles.find(coord);
-        if (it != elevation_tiles.end()) {
-            return it->second.get(pixel_x, pixel_y);
+float World::get_elevation_height(TileCoordinate coord, int pixel_x, int pixel_y) {
+    std::unique_lock lock(terrain_cache_mutex);
+    auto it = elevation_tiles.find(coord);
+    if (it == elevation_tiles.end()) {
+        if (requested_elevation_tiles.insert(coord).second) {
+            elevation_tile_queue.push(coord);
+            elevation_tile_condition.notify_one();
         }
+        elevation_tile_condition.wait(lock, [this, coord] {
+            return elevation_tiles.contains(coord);
+        });
+        it = elevation_tiles.find(coord);
     }
-
-    ElevationTile tile_data;
-    try {
-        tile_data = elevation_tile_fetcher.elevation_tile_fetch(zoom, coord.x, coord.y);
-    } catch (const std::exception& error) {
-        std::cerr << "Failed to load elevation tile " << coord.x << ", " << coord.y
-                  << ": " << error.what() << ". Using sea level.\n";
-    }
-
-    std::lock_guard lock(terrain_cache_mutex);
-    auto [it, inserted] = elevation_tiles.emplace(coord, std::move(tile_data));
     return it->second.get(pixel_x, pixel_y);
 }
 
@@ -153,7 +189,7 @@ TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
     float moisture_value = (moisture.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
 
     const TileCoordinate pixel = geo_to_tile_pixel(geo, ELEVATION_ZOOM);
-    const float height_f = get_elevation_height(ELEVATION_ZOOM, tile, pixel.x, pixel.y);
+    const float height_f = get_elevation_height(tile, pixel.x, pixel.y);
 
 
     TerrainColumn column;
