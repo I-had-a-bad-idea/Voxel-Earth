@@ -564,9 +564,38 @@ void World::update_chunks() {
             continue;
         }
 
-        // chunk.object->visible = sphere_in_frustum(scene.frustum, chunk_center, chunk_radius);
+        chunk.object->visible = sphere_in_frustum(scene.frustum, chunk_center, chunk_radius);
     }
+    prefetch_elevation_tiles(camera_chunk_x, camera_chunk_z);
+}
 
+void World::prefetch_elevation_tiles(int camera_chunk_x, int camera_chunk_z) {
+    bool added_tiles = false;
+    // Fetch all elevation tiles that are within the render distance of the camera.
+    for (int dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; ++dx) {
+        for (int dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; ++dz) {
+            int chunk_x = camera_chunk_x + dx;
+            int chunk_z = camera_chunk_z + dz;
+            const GeoCoordinate geo = world_to_geo(chunk_x * CHUNK_SIZE_X, chunk_z * CHUNK_SIZE_Z);
+            const TileCoordinate tile = geo_to_tile(geo, ELEVATION_ZOOM);
+            std::lock_guard lock(terrain_cache_mutex);
+            // Already downloaded
+            if (elevation_tiles.contains(tile)) {
+                continue;
+            }
+
+            // Already queued
+            if (!requested_elevation_tiles.insert(tile).second) {
+                continue;
+            }
+            // Add it to the queue
+            elevation_tile_queue.push(tile);
+            added_tiles = true;
+        }
+    }
+    if (added_tiles) {
+        elevation_tile_condition.notify_one();
+    }
 }
 
 void World::setup() {

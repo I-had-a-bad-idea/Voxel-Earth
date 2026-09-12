@@ -29,7 +29,7 @@ constexpr int MAX_NEW_REQUESTS_PER_FRAME = 16;
 
 constexpr int RENDER_DISTANCE = 35;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
-constexpr int UNDERGROUND_STREAM_DISTANCE = 0;
+constexpr int UNDERGROUND_STREAM_DISTANCE = 1;
 constexpr int ELEVATION_ZOOM = 15;
 constexpr int ELEVATION_TILE_CACHE_DISTANCE = 10; // in tiles, not chunks (40 chunks)
 // Each tile is 256x256 blocks, each chunk is 64x64x64 blocks, so 1 tile = 4 chunks.
@@ -137,6 +137,7 @@ class World {
 
     void generate_chunks();
     void update_chunk_meshes();
+    void prefetch_elevation_tiles(int camera_chunk_x, int camera_chunk_z);
     void fetch_elevation_tiles();
     TerrainColumn generate_terrain_column(int world_x, int world_z);
     std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
