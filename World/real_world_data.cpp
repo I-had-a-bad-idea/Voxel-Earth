@@ -138,3 +138,42 @@ TileCoordinate geo_to_elevation_tile_pixel(GeoCoordinate coord, int zoom) {
     const int pixel_y = std::clamp(static_cast<int>((y - tile_y) * ElevationTile::SIZE), 0, ElevationTile::SIZE - 1);
     return { pixel_x, pixel_y };
 }
+
+static std::string latitude_prefix(int lat) {
+    return lat >= 0 ? "N" : "S";
+}
+
+static std::string longitude_prefix(int lon) {
+    return lon >= 0 ? "E" : "W";
+}
+
+std::string make_world_cover_tile_name(int tile_lat, int tile_lon) {
+    std::string name;
+
+    name.append(latitude_prefix(tile_lat)); // append the latitude
+    name.append(std::to_string(std::abs(tile_lat))); // absolute value, since sign is in the prefix
+
+    name.append(longitude_prefix(tile_lon));
+    int abs_tile_lon = std::abs(tile_lon);
+    
+    if (abs_tile_lon < 100) { // if longitude only has two digits
+        name.append("0"); //  make the third a 0
+    }
+    name.append(std::to_string(std::abs(tile_lon))); // absolute value, since sign is in the prefix
+   
+
+    return name;
+}
+
+// See https://esa-worldcover.s3.eu-central-1.amazonaws.com/v100/2020/docs/WorldCover_PUM_V1.0.pdf#%5B%7B%22num%22%3A33%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C70%2C770%2C0%5D
+// at 3.1 (page 11)
+WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_lon) {
+    const std::string tile = make_world_cover_tile_name(tile_lat, tile_lon);
+
+    const std::string filename =
+        std::string("https://esa-worldcover.s3.eu-central-1.amazonaws.com/") +
+        "v200/2021/map/" + // I guess needed to get the correct version; see Terrascope with Python example here: https://esa-worldcover.org/en/data-access
+        "ESA_WorldCover_10m_2021_v200_" + // this is the 10 m resolution ESA WorldCover // we want the data from 2021 and version v200
+        tile +
+        "_Map.tif";
+}
