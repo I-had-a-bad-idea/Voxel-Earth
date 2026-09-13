@@ -16,7 +16,7 @@
 #include <VGL/object.h>
 #include <VGL/math.h>
 
-#include "elevation_tile.h"
+#include "real_world_data.h"
 #include "Math/noise.h"
 #include "block.h"
 #include "chunk.h"
