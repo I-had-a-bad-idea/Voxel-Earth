@@ -182,13 +182,13 @@ float World::get_elevation_height(TileCoordinate coord, int pixel_x, int pixel_y
 
 TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
     const GeoCoordinate geo = world_to_geo(world_x, world_z);
-    const TileCoordinate tile = geo_to_tile(geo, ELEVATION_ZOOM);
+    const TileCoordinate tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
     
     // Get noise + convert -1..1 -> 0..1
     float temperature_value = (temperature.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
     float moisture_value = (moisture.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
 
-    const TileCoordinate pixel = geo_to_tile_pixel(geo, ELEVATION_ZOOM);
+    const TileCoordinate pixel = geo_to_elevation_tile_pixel(geo, ELEVATION_ZOOM);
     const float height_f = get_elevation_height(tile, pixel.x, pixel.y);
 
 
@@ -577,7 +577,7 @@ void World::prefetch_elevation_tiles(int camera_chunk_x, int camera_chunk_z) {
             int chunk_x = camera_chunk_x + dx;
             int chunk_z = camera_chunk_z + dz;
             const GeoCoordinate geo = world_to_geo(chunk_x * CHUNK_SIZE_X, chunk_z * CHUNK_SIZE_Z);
-            const TileCoordinate tile = geo_to_tile(geo, ELEVATION_ZOOM);
+            const TileCoordinate tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
             std::lock_guard lock(terrain_cache_mutex);
             // Already downloaded
             if (elevation_tiles.contains(tile)) {
@@ -635,8 +635,8 @@ void World::update(float delta_time) {
     std::vector<TileCoordinate> tiles_to_remove;
     std::lock_guard lock(terrain_cache_mutex);
     for (const auto& [coord, tile] : elevation_tiles) {
-        int dx = coord.x - geo_to_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).x;
-        int dz = coord.y - geo_to_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).y;
+        int dx = coord.x - geo_to_elevation_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).x;
+        int dz = coord.y - geo_to_elevation_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).y;
         if (std::abs(dx) > ELEVATION_TILE_CACHE_DISTANCE || std::abs(dz) > ELEVATION_TILE_CACHE_DISTANCE) {
             tiles_to_remove.push_back(coord);
         }

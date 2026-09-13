@@ -7,6 +7,8 @@
 #include <cmath>
 #include <vector>
 
+#include "land_cover.h"
+
 #include <curl/curl.h>
 
 constexpr double METERS_PER_WORLD_BLOCK = 1;
@@ -49,15 +51,42 @@ struct ElevationTile {
 };
 
 
+struct WorldCoverTile {
+    static constexpr int SIZE = 10;
+
+    std::vector<uint8_t> land_cover;
+
+    WorldCoverTile() : land_cover(SIZE * SIZE , 0) {}
+
+    uint8_t get(int x, int y) const {
+        return land_cover[y * SIZE + x];
+    }
+    LandCover get_land_cover(int x, int y) const {
+        return static_cast<LandCover>(get(x, y));
+    }
+} ;
+
 GeoCoordinate world_to_geo(int x, int z);
-TileCoordinate geo_to_tile(GeoCoordinate coord, int zoom);
-TileCoordinate geo_to_tile_pixel(GeoCoordinate coord, int zoom);
+TileCoordinate geo_to_elevation_tile(GeoCoordinate coord, int zoom);
+TileCoordinate geo_to_elevation_tile_pixel(GeoCoordinate coord, int zoom);
 
 class ElevationTileFetcher {
     public:
         ElevationTileFetcher();
         ~ElevationTileFetcher();
         ElevationTile elevation_tile_fetch(int zoom, int tile_x, int tile_y);
+    
+    private:
+        CURL* curl;
+
+        static size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp);
+};
+
+class WorldCoverFetcher {
+    public:
+        WorldCoverFetcher();
+        ~WorldCoverFetcher();
+        WorldCoverTile world_cover_tile_fetch(int tile_lat, int tile_lon);
     
     private:
         CURL* curl;

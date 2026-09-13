@@ -3,7 +3,7 @@
 #include "block.h"
 #include "Math/noise.h"
 #include "Math/packing.hpp"
-#include "biomes.h"
+#include "land_cover.h"
 
 #define CHUNK_SIZE_X 64
 #define CHUNK_SIZE_Z 64

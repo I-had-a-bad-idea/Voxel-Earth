@@ -109,7 +109,7 @@ GeoCoordinate world_to_geo(int x, int z) {
     return { latitude, longitude };
 }
 
-TileCoordinate geo_to_tile(GeoCoordinate coord, int zoom) {
+TileCoordinate geo_to_elevation_tile(GeoCoordinate coord, int zoom) {
     const double latitude = std::clamp(coord.latitude, -85.05112878, 85.05112878);
     const int n = 1 << zoom;
 
@@ -122,7 +122,7 @@ TileCoordinate geo_to_tile(GeoCoordinate coord, int zoom) {
     return { static_cast<int>(std::floor(x)), static_cast<int>(std::floor(y)) };
 }
 
-TileCoordinate geo_to_tile_pixel(GeoCoordinate coord, int zoom) {
+TileCoordinate geo_to_elevation_tile_pixel(GeoCoordinate coord, int zoom) {
     const double latitude = std::clamp(coord.latitude, -85.05112878, 85.05112878);
     const int n = 1 << zoom;
 
