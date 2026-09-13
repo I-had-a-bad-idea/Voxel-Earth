@@ -56,4 +56,18 @@ You will have a `client.exe` and a `server.exe`.
 6. End client/server with `Esc` (never just close the server or you might lose the changes made to the world)
 
 ## Licenses
-[Terrain Tiles License](./TERRAIN_TILES_ATTRIBUTION.md)
+
+### World data
+All data is downloaded in real time.
+
+#### Elevation data
+The elevation data is from a dataset managed by Mapzen:
+https://registry.opendata.aws/terrain-tiles/            
+[Terrain Tiles Atttribution](./TERRAIN_TILES_ATTRIBUTION.md)
+
+#### World cover data
+
+The world cover data is from a dataset by the European Space Agency (ESA):
+https://esa-worldcover.org/en           
+*© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium*          
+> The ESA WorldCover product is provided free of charge, without restriction of use. For the full license information see the Creative Commons Attribution 4.0 International License.
