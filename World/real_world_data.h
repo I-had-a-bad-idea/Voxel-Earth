@@ -22,20 +22,36 @@ struct GeoCoordinate {
     double longitude;
 };
 
-struct TileCoordinate {
+struct ElevationTileCoordinate {
     int x;
     int y;
 
-    bool operator==(const TileCoordinate& other) const {
+    bool operator==(const ElevationTileCoordinate& other) const {
         return x == other.x && y == other.y;
     }
 };
 
-struct TileCoordinateHash {
-    std::size_t operator()(const TileCoordinate& coord) const {
+struct ElevationTileCoordinateHash {
+    std::size_t operator()(const ElevationTileCoordinate& coord) const {
         return std::hash<int>()(coord.x) ^ (std::hash<int>()(coord.y) << 1);
     }
 };
+
+struct WorldCoverTileCoordinate {
+    int x;
+    int y;
+
+    bool operator==(const WorldCoverTileCoordinate& other) const {
+        return x == other.x && y == other.y;
+    }
+};
+
+struct WorldCoverTileCoordinateHash {
+    std::size_t operator()(const WorldCoverTileCoordinate& coord) const {
+        return std::hash<int>()(coord.x) ^ (std::hash<int>()(coord.y) << 1);
+    }
+};
+
 
 struct ElevationTile {
     static constexpr int SIZE = 256;
@@ -67,8 +83,8 @@ struct WorldCoverTile {
 } ;
 
 GeoCoordinate world_to_geo(int x, int z);
-TileCoordinate geo_to_elevation_tile(GeoCoordinate coord, int zoom);
-TileCoordinate geo_to_elevation_tile_pixel(GeoCoordinate coord, int zoom);
+ElevationTileCoordinate geo_to_elevation_tile(GeoCoordinate coord, int zoom);
+ElevationTileCoordinate geo_to_elevation_tile_pixel(GeoCoordinate coord, int zoom);
 
 class ElevationTileFetcher {
     public:

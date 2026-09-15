@@ -87,6 +87,7 @@ class World {
     Scene scene;
 
     ElevationTileFetcher elevation_tile_fetcher;
+    WorldCoverFetcher world_cover_fetcher;
 
     std::vector<PlayerObject> player_objects;
 
@@ -98,16 +99,24 @@ class World {
     std::unordered_map<ChunkPos, Chunk, ChunkPosHash> chunks;
     std::unordered_map<ChunkPos, std::vector<PendingBlockEdit>, ChunkPosHash> pending_block_edits;
     
-    Noise temperature;
-    Noise moisture;
+
     std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
-    std::unordered_map<TileCoordinate, ElevationTile, TileCoordinateHash> elevation_tiles;
+    std::unordered_map<ElevationTileCoordinate, ElevationTile, ElevationTileCoordinateHash> elevation_tiles;
+    std::unordered_map<WorldCoverTileCoordinate, WorldCoverTile, WorldCoverTileCoordinateHash> world_cover_tiles;
+
     std::mutex terrain_cache_mutex;
+
     std::condition_variable elevation_tile_condition;
-    std::queue<TileCoordinate> elevation_tile_queue;
-    std::unordered_set<TileCoordinate, TileCoordinateHash> requested_elevation_tiles;
-    std::thread elevation_tile_thread;
-    bool stop_elevation_tile_thread = false;
+    std::queue<ElevationTileCoordinate> elevation_tile_queue;
+
+    std::condition_variable world_cover_tile_condition;
+    std::queue<WorldCoverTileCoordinate> world_cover_tile_queue;
+
+    std::unordered_set<ElevationTileCoordinate, ElevationTileCoordinateHash> requested_elevation_tiles;
+    std::unordered_set<WorldCoverTileCoordinate, WorldCoverTileCoordinateHash> requested_world_cover_tiles;
+
+    std::thread world_data_thread;
+    bool stop_world_data_thread = false;
 
 
     std::vector<ChunkPos> new_requests;
@@ -143,7 +152,8 @@ class World {
     std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
-    float get_elevation_height(TileCoordinate coord, int pixel_x, int pixel_y);
+    float get_elevation_height(ElevationTileCoordinate coord, int pixel_x, int pixel_y);
+    LandCover get_world_cover(GeoCoordinate geo);
 
     public:
         World(Renderer& renderer_);

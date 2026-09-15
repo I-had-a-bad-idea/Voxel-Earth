@@ -27,11 +27,9 @@ ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
 }
 
 World::World(Renderer& renderer_)
-    : renderer(renderer_),
-      temperature(3456, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm),
-      moisture(7890, 0.0015f, 3, 2.0f, 0.5f, FastNoiseLite::FractalType_FBm)
+    : renderer(renderer_)
 {
-    elevation_tile_thread = std::thread(&World::fetch_elevation_tiles, this);
+    world_data_thread = std::thread(&World::fetch_elevation_tiles, this);
     generation_thread = std::thread(&World::generate_chunks, this);
     mesh_update_thread = std::thread(&World::update_chunk_meshes, this);
 }
@@ -46,10 +44,10 @@ World::~World() {
 
     {
         std::lock_guard lock(terrain_cache_mutex);
-        stop_elevation_tile_thread = true;
+        stop_world_data_thread = true;
     }
     elevation_tile_condition.notify_one();
-    elevation_tile_thread.join();
+    world_data_thread.join();
 
     {
         std::lock_guard lock(mesh_update_mutex);
@@ -61,35 +59,60 @@ World::~World() {
 
 void World::fetch_elevation_tiles() {
     while (true) {
-        TileCoordinate coord;
+        ElevationTileCoordinate coord;
+        WorldCoverTileCoordinate cover_coord;
+        bool fetch_cover = false;
         {
             std::unique_lock lock(terrain_cache_mutex);
             elevation_tile_condition.wait(lock, [this] {
-                return stop_elevation_tile_thread || !elevation_tile_queue.empty();
+                return stop_world_data_thread || !elevation_tile_queue.empty() || !world_cover_tile_queue.empty();
             });
 
-            if (stop_elevation_tile_thread && elevation_tile_queue.empty()) {
+            if (stop_world_data_thread && elevation_tile_queue.empty() && world_cover_tile_queue.empty()) {
                 return;
             }
 
-            coord = elevation_tile_queue.front();
-            elevation_tile_queue.pop();
+            if (!elevation_tile_queue.empty()) {
+                coord = elevation_tile_queue.front();
+                elevation_tile_queue.pop();
+            } else {
+                cover_coord = world_cover_tile_queue.front();
+                world_cover_tile_queue.pop();
+                fetch_cover = true;
+            }
         }
 
-        ElevationTile tile_data;
-        try {
-            tile_data = elevation_tile_fetcher.elevation_tile_fetch(ELEVATION_ZOOM, coord.x, coord.y);
-        } catch (const std::exception& error) {
-            std::cerr << "Failed to load elevation tile " << coord.x << ", " << coord.y
-                      << ": " << error.what() << ". Using sea level.\n";
-        }
+        if (fetch_cover) {
+            WorldCoverTile tile_data;
+            try {
+                tile_data = world_cover_fetcher.world_cover_tile_fetch(cover_coord.x, cover_coord.y);
+            } catch (const std::exception& error) {
+                std::cerr << "Failed to load world cover tile " << cover_coord.x << ", " << cover_coord.y
+                          << ": " << error.what() << ". Using elevation-based surface.\n";
+            }
 
-        {
-            std::lock_guard lock(terrain_cache_mutex);
-            elevation_tiles.emplace(coord, std::move(tile_data));
-            requested_elevation_tiles.erase(coord);
+            {
+                std::lock_guard lock(terrain_cache_mutex);
+                world_cover_tiles.emplace(cover_coord, std::move(tile_data));
+                requested_world_cover_tiles.erase(cover_coord);
+            }
+        } else {
+            ElevationTile tile_data;
+            try {
+                tile_data = elevation_tile_fetcher.elevation_tile_fetch(ELEVATION_ZOOM, coord.x, coord.y);
+            } catch (const std::exception& error) {
+                std::cerr << "Failed to load elevation tile " << coord.x << ", " << coord.y
+                          << ": " << error.what() << ". Using sea level.\n";
+            }
+
+            {
+                std::lock_guard lock(terrain_cache_mutex);
+                elevation_tiles.emplace(coord, std::move(tile_data));
+                requested_elevation_tiles.erase(coord);
+            }
         }
         elevation_tile_condition.notify_all();
+        world_cover_tile_condition.notify_all();
     }
 }
 
@@ -163,7 +186,7 @@ void World::update_chunk_meshes() {
     }
 }
 
-float World::get_elevation_height(TileCoordinate coord, int pixel_x, int pixel_y) {
+float World::get_elevation_height(ElevationTileCoordinate coord, int pixel_x, int pixel_y) {
     std::unique_lock lock(terrain_cache_mutex);
     auto it = elevation_tiles.find(coord);
     if (it == elevation_tiles.end()) {
@@ -179,41 +202,74 @@ float World::get_elevation_height(TileCoordinate coord, int pixel_x, int pixel_y
     return it->second.get(pixel_x, pixel_y);
 }
 
+LandCover World::get_world_cover(GeoCoordinate geo) {
+    const WorldCoverTileCoordinate coord{
+        static_cast<int>(std::floor(geo.latitude)),
+        static_cast<int>(std::floor(geo.longitude))
+    };
+
+    std::unique_lock lock(terrain_cache_mutex);
+    auto it = world_cover_tiles.find(coord);
+    if (it == world_cover_tiles.end()) {
+        if (requested_world_cover_tiles.insert(coord).second) {
+            world_cover_tile_queue.push(coord);
+            elevation_tile_condition.notify_one();
+        }
+        world_cover_tile_condition.wait(lock, [this, coord] {
+            return world_cover_tiles.contains(coord);
+        });
+        it = world_cover_tiles.find(coord);
+    }
+
+    const WorldCoverTile& tile = it->second;
+    if (tile.width <= 0 || tile.height <= 0 || tile.land_cover.empty()) {
+        return LandCover::NoData;
+    }
+
+    const double x_fraction = geo.longitude - coord.y;
+    const double y_fraction = (coord.x + 1.0) - geo.latitude;
+    const int pixel_x = std::clamp(static_cast<int>(x_fraction * tile.width), 0, tile.width - 1);
+    const int pixel_y = std::clamp(static_cast<int>(y_fraction * tile.height), 0, tile.height - 1);
+    return tile.get_land_cover(pixel_x, pixel_y);
+}
+
 
 TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
     const GeoCoordinate geo = world_to_geo(world_x, world_z);
-    const TileCoordinate tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
     
-    // Get noise + convert -1..1 -> 0..1
-    float temperature_value = (temperature.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
-    float moisture_value = (moisture.at(static_cast<float>(world_x), static_cast<float>(world_z)) + 1.0f) * 0.5f;
-
-    const TileCoordinate pixel = geo_to_elevation_tile_pixel(geo, ELEVATION_ZOOM);
+    // Elevation
+    const ElevationTileCoordinate tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
+    const ElevationTileCoordinate pixel = geo_to_elevation_tile_pixel(geo, ELEVATION_ZOOM);
     const float height_f = get_elevation_height(tile, pixel.x, pixel.y);
 
 
     TerrainColumn column;
     column.height = static_cast<int>(std::round(height_f / METERS_PER_WORLD_BLOCK));
-    // if (mountain_factor > 0.45f) {
-    //     column.biome = Biome::Mountains;
-    // }
-    if (temperature_value < 0.30f) {
-        column.biome = Biome::Tundra;
-    } else if (temperature_value > 0.70f && moisture_value < 0.35f) {
-        column.biome = Biome::Desert;
-    } else if (moisture_value > 0.65f) {
-        column.biome = Biome::Forest;
-    } else {
-        column.biome = Biome::Plains;
-    }
 
+    // World cover
+
+    const LandCover land_cover = get_world_cover(geo);
+
+    column.biome = Biome::Plains;
+    column.land_cover = land_cover;
     column.surface = BlockType::Grass;
-    if (column.height <= SEA_LEVEL + 2 || column.biome == Biome::Desert) {
-        column.surface = BlockType::Sand;
-    } else if (column.biome == Biome::Tundra || (column.biome == Biome::Mountains && column.height > CHUNK_SIZE_Y * 0.72f)) {
+    if (land_cover == LandCover::SnowIce) {
+        column.biome = Biome::Tundra;
         column.surface = BlockType::Snow;
-    } else if (column.biome == Biome::Mountains) {
+    } else if (land_cover == LandCover::BareSparseVegetation) {
+        column.biome = Biome::Desert;
+        column.surface = BlockType::Sand;
+    } else if (land_cover == LandCover::BuiltUp) {
         column.surface = BlockType::Stone;
+    } else if (land_cover == LandCover::PermanentWater || column.height <= SEA_LEVEL + 2) {
+        column.surface = BlockType::Sand;
+    } else if (land_cover == LandCover::TreeCover || land_cover == LandCover::Shrubland) {
+        column.biome = Biome::Forest;
+    } else if (land_cover == LandCover::NoData && column.height > SEA_LEVEL + 2) {
+        column.surface = column.height > CHUNK_SIZE_Y * 0.72f ? BlockType::Snow : BlockType::Grass;
+        if (column.surface == BlockType::Snow) {
+            column.biome = Biome::Tundra;
+        }
     }
     return column;
 }
@@ -577,7 +633,7 @@ void World::prefetch_elevation_tiles(int camera_chunk_x, int camera_chunk_z) {
             int chunk_x = camera_chunk_x + dx;
             int chunk_z = camera_chunk_z + dz;
             const GeoCoordinate geo = world_to_geo(chunk_x * CHUNK_SIZE_X, chunk_z * CHUNK_SIZE_Z);
-            const TileCoordinate tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
+            const ElevationTileCoordinate tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
             std::lock_guard lock(terrain_cache_mutex);
             // Already downloaded
             if (elevation_tiles.contains(tile)) {
@@ -632,7 +688,7 @@ void World::setup() {
 void World::update(float delta_time) {
     update_chunks();
     // Remove Elevation tiles that are too far away
-    std::vector<TileCoordinate> tiles_to_remove;
+    std::vector<ElevationTileCoordinate> tiles_to_remove;
     std::lock_guard lock(terrain_cache_mutex);
     for (const auto& [coord, tile] : elevation_tiles) {
         int dx = coord.x - geo_to_elevation_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).x;
@@ -642,7 +698,7 @@ void World::update(float delta_time) {
         }
     }
 
-    for (const TileCoordinate& coord : tiles_to_remove) {
+    for (const ElevationTileCoordinate& coord : tiles_to_remove) {
         elevation_tiles.erase(coord);
     }
 
