@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <iostream>
 
 #include "land_cover.h"
 
@@ -85,6 +86,9 @@ struct WorldCoverTile {
 GeoCoordinate world_to_geo(int x, int z);
 ElevationTileCoordinate geo_to_elevation_tile(GeoCoordinate coord, int zoom);
 ElevationTileCoordinate geo_to_elevation_tile_pixel(GeoCoordinate coord, int zoom);
+
+int world_cover_tile_lat(double latitude);
+int world_cover_tile_lon(double longitude);
 
 class ElevationTileFetcher {
     public:

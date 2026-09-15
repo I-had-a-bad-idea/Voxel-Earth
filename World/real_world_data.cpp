@@ -211,6 +211,15 @@ ElevationTileCoordinate geo_to_elevation_tile_pixel(GeoCoordinate coord, int zoo
     return { pixel_x, pixel_y };
 }
 
+// The dataset uses 3° * 3° tiles (lower left corner)
+int world_cover_tile_lat(double latitude) {
+    return static_cast<int>(std::floor(latitude / 3.0) * 3.0);
+}
+
+int world_cover_tile_lon(double longitude) {
+    return static_cast<int>(std::floor(longitude / 3.0) * 3.0);
+}
+
 static std::string latitude_prefix(int lat) {
     return lat >= 0 ? "N" : "S";
 }
@@ -221,6 +230,7 @@ static std::string longitude_prefix(int lon) {
 
 std::string make_world_cover_tile_name(int tile_lat, int tile_lon) {
     std::string name;
+
 
     name.append(latitude_prefix(tile_lat)); // append the latitude
     name.append(std::to_string(std::abs(tile_lat))); // absolute value, since sign is in the prefix
@@ -258,6 +268,8 @@ WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_
         "ESA_WorldCover_10m_2021_v200_" + // this is the 10 m resolution ESA WorldCover // we want the data from 2021 and version v200
         tile +
         "_Map.tif";
+
+    std::cout << "Fetching world cover tile " << tile << " from " << filename << std::endl;
 
     std::vector<uint8_t> tiff_data;
     curl_easy_setopt(curl, CURLOPT_URL, filename.c_str());
@@ -306,11 +318,33 @@ WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_
     tile_data.width = static_cast<int>(width);
     tile_data.height = static_cast<int>(height);
     tile_data.land_cover.resize(static_cast<size_t>(width) * height);
-    for (uint32_t y = 0; y < height; ++y) {
-        uint8_t* row = tile_data.land_cover.data() + static_cast<size_t>(y) * width;
-        if (TIFFReadScanline(tiff, row, y, 0) < 0) {
-            TIFFClose(tiff);
-            throw std::runtime_error("Failed to read land cover GeoTIFF scanline");
+
+    uint32_t tile_width = 0;
+    uint32_t tile_height = 0;
+
+    if (!TIFFGetField(tiff, TIFFTAG_TILEWIDTH, &tile_width) || !TIFFGetField(tiff, TIFFTAG_TILELENGTH, &tile_height)) {
+        TIFFClose(tiff);
+        throw std::runtime_error("GeoTIFF is tiled but tile dimensions are unavailable");
+    }
+
+    std::vector<uint8_t> tile_buffer(static_cast<size_t>(tile_width) * tile_height);
+    for (uint32_t y = 0; y < height; y += tile_height) {
+        for (uint32_t x = 0; x < width; x += tile_width) {
+
+            if (TIFFReadTile(tiff, tile_buffer.data(), x, y, 0, 0) < 0) {
+                TIFFClose(tiff);
+                throw std::runtime_error("Failed to read land cover GeoTIFF tile");
+            }
+
+            const uint32_t copy_width = std::min(tile_width, width - x);
+            const uint32_t copy_height = std::min(tile_height, height - y);
+
+            for (uint32_t ty = 0; ty < copy_height; ++ty) {
+                uint8_t* dst = tile_data.land_cover.data() + static_cast<size_t>(y + ty) * width + x;
+                const uint8_t* src = tile_buffer.data() + static_cast<size_t>(ty) * tile_width;
+
+                std::memcpy(dst, src, copy_width);
+            }
         }
     }
 

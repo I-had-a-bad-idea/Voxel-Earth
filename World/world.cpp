@@ -85,7 +85,10 @@ void World::fetch_elevation_tiles() {
         if (fetch_cover) {
             WorldCoverTile tile_data;
             try {
-                tile_data = world_cover_fetcher.world_cover_tile_fetch(cover_coord.x, cover_coord.y);
+                const int tile_lat = world_cover_tile_lat(cover_coord.x);
+                const int tile_lon = world_cover_tile_lon(cover_coord.y);
+
+                tile_data = world_cover_fetcher.world_cover_tile_fetch(tile_lat, tile_lon);
             } catch (const std::exception& error) {
                 std::cerr << "Failed to load world cover tile " << cover_coord.x << ", " << cover_coord.y
                           << ": " << error.what() << ". Using elevation-based surface.\n";
