@@ -207,8 +207,8 @@ float World::get_elevation_height(ElevationTileCoordinate coord, int pixel_x, in
 
 LandCover World::get_world_cover(GeoCoordinate geo) {
     const WorldCoverTileCoordinate coord{
-        static_cast<int>(std::floor(geo.latitude)),
-        static_cast<int>(std::floor(geo.longitude))
+        world_cover_tile_lat(geo.latitude),
+        world_cover_tile_lon(geo.longitude)
     };
 
     std::unique_lock lock(terrain_cache_mutex);
@@ -229,8 +229,8 @@ LandCover World::get_world_cover(GeoCoordinate geo) {
         return LandCover::NoData;
     }
 
-    const double x_fraction = geo.longitude - coord.y;
-    const double y_fraction = (coord.x + 1.0) - geo.latitude;
+    const double x_fraction = (geo.longitude - coord.y) / 3.0;
+    const double y_fraction = (coord.x + 3.0 - geo.latitude) / 3.0;
     const int pixel_x = std::clamp(static_cast<int>(x_fraction * tile.width), 0, tile.width - 1);
     const int pixel_y = std::clamp(static_cast<int>(y_fraction * tile.height), 0, tile.height - 1);
     return tile.get_land_cover(pixel_x, pixel_y);
