@@ -5,6 +5,64 @@
 #include <stdexcept>
 #include <vector>
 
+namespace {
+struct TiffMemoryFile {
+    const std::vector<uint8_t>& data;
+    toff_t position = 0;
+};
+
+tmsize_t tiff_read(thandle_t handle, void* buffer, tmsize_t size) {
+    auto& file = *static_cast<TiffMemoryFile*>(handle); // Get reference to file (as a tiffmemoryfile)
+
+    const toff_t remaining = file.data.size() - std::min(file.position, static_cast<toff_t>(file.data.size()));
+    const tmsize_t count = static_cast<tmsize_t>(std::min(static_cast<toff_t>(size), remaining));
+    
+    std::memcpy(buffer, file.data.data() + file.position, static_cast<size_t>(count));
+    file.position += static_cast<toff_t>(count);
+
+    return count;
+}
+
+tmsize_t tiff_write(thandle_t, void*, tmsize_t) {
+    return 0;
+}
+
+toff_t tiff_seek(thandle_t handle, toff_t offset, int whence) {
+    auto& file = *static_cast<TiffMemoryFile*>(handle);
+    const toff_t size = static_cast<toff_t>(file.data.size());
+    toff_t position = file.position;
+    if (whence == SEEK_SET) {
+        position = offset;
+    } else if (whence == SEEK_CUR) {
+        position += offset;
+    } else if (whence == SEEK_END) {
+        position = size + offset;
+    } else {
+        return static_cast<toff_t>(-1);
+    }
+
+    if (position > size) {
+        return static_cast<toff_t>(-1);
+    }
+    file.position = position;
+    return position;
+}
+
+int tiff_close(thandle_t) {
+    return 0;
+}
+
+toff_t tiff_size(thandle_t handle) {
+    return static_cast<toff_t>(static_cast<TiffMemoryFile*>(handle)->data.size());
+}
+
+int tiff_map(thandle_t, void**, toff_t*) {
+    return 0;
+}
+
+void tiff_unmap(thandle_t, void*, toff_t) {}
+}
+
 ElevationTileFetcher::ElevationTileFetcher() {
     curl = curl_easy_init();
 
@@ -24,6 +82,17 @@ size_t ElevationTileFetcher::write_callback(void* contents, size_t size, size_t 
     buffer->insert( buffer->end(), bytes, bytes + total);
 
     return total;
+}
+
+WorldCoverFetcher::WorldCoverFetcher() {
+    curl = curl_easy_init();
+    if (!curl) {
+        throw std::runtime_error("curl_easy_init failed");
+    }
+}
+
+WorldCoverFetcher::~WorldCoverFetcher() {
+    curl_easy_cleanup(curl);
 }
 
 ElevationTile ElevationTileFetcher::elevation_tile_fetch(int zoom, int tile_x, int tile_y) {
