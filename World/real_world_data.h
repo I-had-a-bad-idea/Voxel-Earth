@@ -52,14 +52,14 @@ struct ElevationTile {
 
 
 struct WorldCoverTile {
-    static constexpr int SIZE = 10;
-
+    int width = 0;
+    int height = 0;
     std::vector<uint8_t> land_cover;
 
-    WorldCoverTile() : land_cover(SIZE * SIZE , 0) {}
+    WorldCoverTile() = default;
 
     uint8_t get(int x, int y) const {
-        return land_cover[y * SIZE + x];
+        return land_cover[y * width + x];
     }
     LandCover get_land_cover(int x, int y) const {
         return static_cast<LandCover>(get(x, y));

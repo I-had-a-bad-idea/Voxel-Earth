@@ -2,6 +2,9 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
+#include <tiffio.h>
+#include <algorithm>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -234,6 +237,16 @@ std::string make_world_cover_tile_name(int tile_lat, int tile_lon) {
     return name;
 }
 
+size_t WorldCoverFetcher::write_callback(void* contents, size_t size, size_t nmemb, void* userp) {
+    auto* buffer = static_cast<std::vector<uint8_t>*>(userp);
+    // counts
+    const size_t total = size * nmemb;
+    const auto* bytes = static_cast<const uint8_t*>(contents);
+    
+    buffer->insert(buffer->end(), bytes, bytes + total); // actual write
+    return total;
+}
+
 // See https://esa-worldcover.s3.eu-central-1.amazonaws.com/v100/2020/docs/WorldCover_PUM_V1.0.pdf#%5B%7B%22num%22%3A33%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C70%2C770%2C0%5D
 // at 3.1 (page 11)
 WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_lon) {
@@ -245,4 +258,62 @@ WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_
         "ESA_WorldCover_10m_2021_v200_" + // this is the 10 m resolution ESA WorldCover // we want the data from 2021 and version v200
         tile +
         "_Map.tif";
+
+    std::vector<uint8_t> tiff_data;
+    curl_easy_setopt(curl, CURLOPT_URL, filename.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &tiff_data);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Voxel-Earth/0.0");
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
+
+    const CURLcode result = curl_easy_perform(curl);
+    long response_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+    if (result != CURLE_OK) {
+        throw std::runtime_error(curl_easy_strerror(result));
+    }
+    if (response_code != 200) {
+        throw std::runtime_error("HTTP error " + std::to_string(response_code));
+    }
+
+    TiffMemoryFile memory_file{tiff_data};
+    TIFF* tiff = TIFFClientOpen(
+        filename.c_str(), "r", &memory_file,
+        &tiff_read, &tiff_write, &tiff_seek, &tiff_close, &tiff_size,
+        &tiff_map, &tiff_unmap
+    );
+    if (!tiff) {
+        throw std::runtime_error("Failed to open downloaded land cover GeoTIFF");
+    }
+
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint16_t bits_per_sample = 0;
+    uint16_t samples_per_pixel = 0;
+    uint16_t sample_format = SAMPLEFORMAT_UINT;
+    if (!TIFFGetField(tiff, TIFFTAG_IMAGEWIDTH, &width) ||
+        !TIFFGetField(tiff, TIFFTAG_IMAGELENGTH, &height) ||
+        !TIFFGetField(tiff, TIFFTAG_BITSPERSAMPLE, &bits_per_sample) ||
+        !TIFFGetField(tiff, TIFFTAG_SAMPLESPERPIXEL, &samples_per_pixel) ||
+        !TIFFGetFieldDefaulted(tiff, TIFFTAG_SAMPLEFORMAT, &sample_format) ||
+        bits_per_sample != 8 || samples_per_pixel != 1 || sample_format != SAMPLEFORMAT_UINT) {
+        TIFFClose(tiff);
+        throw std::runtime_error("Unsupported land cover GeoTIFF format");
+    }
+
+    WorldCoverTile tile_data;
+    tile_data.width = static_cast<int>(width);
+    tile_data.height = static_cast<int>(height);
+    tile_data.land_cover.resize(static_cast<size_t>(width) * height);
+    for (uint32_t y = 0; y < height; ++y) {
+        uint8_t* row = tile_data.land_cover.data() + static_cast<size_t>(y) * width;
+        if (TIFFReadScanline(tiff, row, y, 0) < 0) {
+            TIFFClose(tiff);
+            throw std::runtime_error("Failed to read land cover GeoTIFF scanline");
+        }
+    }
+
+    TIFFClose(tiff);
+    return tile_data;
 }
