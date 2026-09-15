@@ -21,9 +21,10 @@ enum class ChunkLOD : char {
 };
 
 struct TerrainColumn {
-    int height;
-    Biome biome;
-    BlockType surface;
+    int height = 0;
+    Biome biome = Biome::Plains;
+    LandCover land_cover = LandCover::NoData;
+    BlockType surface = BlockType::Grass;
 };
 
 struct ChunkPos {
