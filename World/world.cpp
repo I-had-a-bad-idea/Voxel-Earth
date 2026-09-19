@@ -30,6 +30,7 @@ World::World(Renderer& renderer_)
     : renderer(renderer_)
 {
     world_data_thread = std::thread(&World::fetch_elevation_tiles, this);
+    world_cover_data_thread = std::thread(&World::fetch_world_cover_tiles, this);
     generation_thread = std::thread(&World::generate_chunks, this);
     mesh_update_thread = std::thread(&World::update_chunk_meshes, this);
 }
@@ -48,6 +49,8 @@ World::~World() {
     }
     elevation_tile_condition.notify_one();
     world_data_thread.join();
+    world_cover_tile_condition.notify_one();
+    world_cover_data_thread.join();
 
     {
         std::lock_guard lock(mesh_update_mutex);
@@ -60,61 +63,69 @@ World::~World() {
 void World::fetch_elevation_tiles() {
     while (true) {
         ElevationTileCoordinate coord;
-        WorldCoverTileCoordinate cover_coord;
-        bool fetch_cover = false;
         {
             std::unique_lock lock(terrain_cache_mutex);
             elevation_tile_condition.wait(lock, [this] {
-                return stop_world_data_thread || !elevation_tile_queue.empty() || !world_cover_tile_queue.empty();
+                return stop_world_data_thread || !elevation_tile_queue.empty();
             });
 
-            if (stop_world_data_thread && elevation_tile_queue.empty() && world_cover_tile_queue.empty()) {
+            if (stop_world_data_thread && elevation_tile_queue.empty()) {
                 return;
             }
 
-            if (!elevation_tile_queue.empty()) {
-                coord = elevation_tile_queue.front();
-                elevation_tile_queue.pop();
-            } else {
-                cover_coord = world_cover_tile_queue.front();
-                world_cover_tile_queue.pop();
-                fetch_cover = true;
-            }
+            coord = elevation_tile_queue.front();
+            elevation_tile_queue.pop();
         }
 
-        if (fetch_cover) {
-            WorldCoverTile tile_data;
-            try {
-                const int tile_lat = world_cover_tile_lat(cover_coord.x);
-                const int tile_lon = world_cover_tile_lon(cover_coord.y);
+        ElevationTile tile_data;
+        try {
+            tile_data = elevation_tile_fetcher.elevation_tile_fetch(ELEVATION_ZOOM, coord.x, coord.y);
+        } catch (const std::exception& error) {
+            std::cerr << "Failed to load elevation tile " << coord.x << ", " << coord.y
+                      << ": " << error.what() << ". Using sea level.\n";
+        }
 
-                tile_data = world_cover_fetcher.world_cover_tile_fetch(tile_lat, tile_lon);
-            } catch (const std::exception& error) {
-                std::cerr << "Failed to load world cover tile " << cover_coord.x << ", " << cover_coord.y
-                          << ": " << error.what() << ". Using elevation-based surface.\n";
-            }
-
-            {
-                std::lock_guard lock(terrain_cache_mutex);
-                world_cover_tiles.emplace(cover_coord, std::move(tile_data));
-                requested_world_cover_tiles.erase(cover_coord);
-            }
-        } else {
-            ElevationTile tile_data;
-            try {
-                tile_data = elevation_tile_fetcher.elevation_tile_fetch(ELEVATION_ZOOM, coord.x, coord.y);
-            } catch (const std::exception& error) {
-                std::cerr << "Failed to load elevation tile " << coord.x << ", " << coord.y
-                          << ": " << error.what() << ". Using sea level.\n";
-            }
-
-            {
-                std::lock_guard lock(terrain_cache_mutex);
-                elevation_tiles.emplace(coord, std::move(tile_data));
-                requested_elevation_tiles.erase(coord);
-            }
+        {
+            std::lock_guard lock(terrain_cache_mutex);
+            elevation_tiles.emplace(coord, std::move(tile_data));
+            requested_elevation_tiles.erase(coord);
         }
         elevation_tile_condition.notify_all();
+    }
+}
+
+void World::fetch_world_cover_tiles() {
+    while (true) {
+        WorldCoverTileCoordinate coord;
+        {
+            std::unique_lock lock(terrain_cache_mutex);
+            world_cover_tile_condition.wait(lock, [this] {
+                return stop_world_data_thread || !world_cover_tile_queue.empty();
+            });
+
+            if (stop_world_data_thread && world_cover_tile_queue.empty()) {
+                return;
+            }
+
+            coord = world_cover_tile_queue.front();
+            world_cover_tile_queue.pop();
+        }
+
+        WorldCoverTile tile_data;
+        try {
+            const int tile_lat = world_cover_tile_lat(coord.x);
+            const int tile_lon = world_cover_tile_lon(coord.y);
+            tile_data = world_cover_fetcher.world_cover_tile_fetch(tile_lat, tile_lon);
+        } catch (const std::exception& error) {
+            std::cerr << "Failed to load world cover tile " << coord.x << ", " << coord.y
+                      << ": " << error.what() << ". Using elevation-based surface.\n";
+        }
+
+        {
+            std::lock_guard lock(terrain_cache_mutex);
+            world_cover_tiles.emplace(coord, std::move(tile_data));
+            requested_world_cover_tiles.erase(coord);
+        }
         world_cover_tile_condition.notify_all();
     }
 }
@@ -216,7 +227,7 @@ LandCover World::get_world_cover(GeoCoordinate geo) {
     if (it == world_cover_tiles.end()) {
         if (requested_world_cover_tiles.insert(coord).second) {
             world_cover_tile_queue.push(coord);
-            elevation_tile_condition.notify_one();
+            world_cover_tile_condition.notify_one();
         }
         world_cover_tile_condition.wait(lock, [this, coord] {
             return world_cover_tiles.contains(coord);
