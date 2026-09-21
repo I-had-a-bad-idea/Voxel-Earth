@@ -7,3 +7,6 @@
 [submodule "external/curl"]
 	path = external/curl
 	url = https://github.com/curl/curl.git
+[submodule "external/libtiff"]
+	path = external/libtiff
+	url = https://gitlab.com/libtiff/libtiff.git

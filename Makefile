@@ -3,6 +3,7 @@ CC  = gcc
 
 ENET_DIR = external/enet
 CURL_DIR = external/curl
+LIBTIFF_DIR = external/libtiff
 VoxelVGL = external/VoxelVGL
 
 CFLAGS = -isystem$(ENET_DIR)/include -Wall -Wextra -Wno-unused-parameter -g -O3
@@ -16,11 +17,15 @@ CPPFLAGS = \
 	-I. \
 	-isystemexternal \
 	-isystem$(CURL_DIR)/include \
+	-isystem$(LIBTIFF_DIR)/libtiff \
+	-isystem$(LIBTIFF_DIR)/build/libtiff \
 	$(VoxelVGL_INCLUDE)
 
 LIBS = \
 	-L$(CURL_DIR)/build/lib \
 	-lcurl \
+	-L$(LIBTIFF_DIR)/build/libtiff \
+	-ltiff \
 	-lws2_32 \
 	-lwinmm \
 	-L$(VULKAN_SDK)/Lib \

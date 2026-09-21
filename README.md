@@ -35,6 +35,28 @@ cmake --build external/curl/build --config Release
 Find where CMake put the built curl and edit the Makefile accrodingly (replace the `-L$(CURL_DIR)/build/lib` with whatever you need)
 Seems like you also have to put the `libcurl.dll` file next to the executable.
 
+### Building libtiff (once)
+
+Configuring libtiff build:
+
+```bash
+cmake -S external/libtiff -B external/libtiff/build
+    -G "MinGW Makefiles"
+    -DCMAKE_BUILD_TYPE=Release
+    -DBUILD_SHARED_LIBS=ON
+    -Dtiff-tools=OFF
+    -Dtiff-tests=OFF
+    -Dtiff-contrib=OFF
+    -Dtiff-docs=OFF
+    -Dtiff-install=OFF
+```
+
+Building libtiff:
+
+```bash
+cmake --build external/libtiff/build --config Release
+```
+
 ### Compiling the actual project
 
 Run:
@@ -56,4 +78,18 @@ You will have a `client.exe` and a `server.exe`.
 6. End client/server with `Esc` (never just close the server or you might lose the changes made to the world)
 
 ## Licenses
-[Terrain Tiles License](./TERRAIN_TILES_ATTRIBUTION.md)
+
+### World data
+All data is downloaded in real time.
+
+#### Elevation data
+The elevation data is from a dataset managed by Mapzen:
+https://registry.opendata.aws/terrain-tiles/            
+[Terrain Tiles Atttribution](./TERRAIN_TILES_ATTRIBUTION.md)
+
+#### World cover data
+
+The world cover data is from a dataset by the European Space Agency (ESA):
+https://esa-worldcover.org/en           
+*© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium*          
+> The ESA WorldCover product is provided free of charge, without restriction of use. For the full license information see the Creative Commons Attribution 4.0 International License.

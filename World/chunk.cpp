@@ -3,6 +3,23 @@
 #include <algorithm>
 #include <stdlib.h>     //for using the function sleep
 
+namespace {
+BlockType surface_block_for_land_cover(LandCover land_cover, BlockType fallback) {
+    switch (land_cover) {
+        case LandCover::SnowIce:
+            return BlockType::Snow;
+        case LandCover::BareSparseVegetation:
+            return BlockType::Sand;
+        case LandCover::BuiltUp:
+            return BlockType::Stone;
+        case LandCover::PermanentWater:
+            return BlockType::Water;
+        default:
+            return fallback;
+    }
+}
+}
+
 Chunk::Chunk() 
         : blocks(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y, BlockType::Air),
             column_tops(CHUNK_SIZE_X * CHUNK_SIZE_Z, 0)
@@ -22,7 +39,7 @@ Chunk::Chunk(const std::vector<TerrainColumn>& terrain_columns,
             const TerrainColumn& column = terrain_columns[x + CHUNK_SIZE_X * z];
             const int height = column.height;
             const Biome biome = column.biome;
-            const BlockType surface = column.surface;
+            const BlockType surface = surface_block_for_land_cover(column.land_cover, column.surface);
 
             const int world_y_base = chunk_y * CHUNK_SIZE_Y;
             int local_top = -1;
