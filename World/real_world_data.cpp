@@ -288,7 +288,8 @@ WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_
     if (response_code != 200) {
         throw std::runtime_error("HTTP error " + std::to_string(response_code));
     }
-
+    std::cout << "Downloaded land cover GeoTIFF for tile " << tile << " (" << tiff_data.size() << " bytes)" << std::endl;
+    
     TiffMemoryFile memory_file{tiff_data};
     TIFF* tiff = TIFFClientOpen(
         filename.c_str(), "r", &memory_file,
@@ -298,6 +299,8 @@ WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_
     if (!tiff) {
         throw std::runtime_error("Failed to open downloaded land cover GeoTIFF");
     }
+
+    std::cout << "Opened land cover GeoTIFF for tile " << tile << std::endl;
 
     uint32_t width = 0;
     uint32_t height = 0;
