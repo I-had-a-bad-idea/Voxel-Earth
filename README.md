@@ -1,7 +1,36 @@
 # Voxel-Earth
 
-Multiplayer voxel game, that uses real-world height data.   
-Basically a voxel game, but the world is the Earth and you can play with your friends on it.
+A multiplayer voxel game where the real Earth is the world
+It uses real-world elevation and land-cover data to generate a voxel representation of Earth
+
+Built using [VoxelVGl](https://github.com/I-had-a-bad-idea/VoxelVGL).
+
+<img src="./images/Grand-Canyon-high.png" alt="Grand canyon high" width="700" height="400">
+<img src="./images/Grand-Canyon-low.png" alt="Grand canyon low" width="700" height="400">
+
+> World-Volume of ~5.4 * 10^10 blocks rendered at around 60FPS on an integrated GPU (may look smaller, as the the unprecise elevation data leads to more blocks using up one height)
+> Grand canyon around lat. 36.1068 and lon. -112.1129
+
+## Overview
+- [Voxel-Earth](#voxel-earth)
+  - [Overview](#overview)
+  - [Idea](#idea)
+  - [Compilation](#compilation)
+    - [Building curl (once)](#building-curl-once)
+    - [Building libtiff (once)](#building-libtiff-once)
+    - [Compiling the actual project](#compiling-the-actual-project)
+  - [Running](#running)
+  - [Project status](#project-status)
+    - [Problems](#problems)
+  - [Licenses](#licenses)
+    - [World data](#world-data)
+      - [Elevation data](#elevation-data)
+      - [World cover data](#world-cover-data)
+
+## Idea
+Most voxel games have a world that is either procedurally generated or hand-crafted. This project aims to create a voxel game where the world is based on real-world data. The goal is to provide a program where players can explore a voxel representation of the Earth in 1:1 scale, with the ability to modify the world and see those changes reflected in real-time for other players.
+
+
 
 ## Compilation
 ### Building curl (once)
