@@ -9,6 +9,7 @@ Built using [VoxelVGl](https://github.com/I-had-a-bad-idea/VoxelVGL).
 <img src="./images/Grand-Canyon-low.png" alt="Grand canyon low" width="700" height="400">
 
 > World-Volume of ~5.4 * 10^10 blocks rendered at around 60FPS on an integrated GPU. The terrain may appear smaller than expected because the limited vertical horizontal precision of the elevation data causes multiple blocks to form one terrain element (seems like 1 block, is actually like 64 (4x4x4)).
+
 > Grand canyon around lat. 36.1068 and lon. -112.1129
 
 ## Overview
