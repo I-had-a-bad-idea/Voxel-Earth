@@ -8,7 +8,7 @@ Built using [VoxelVGl](https://github.com/I-had-a-bad-idea/VoxelVGL).
 <img src="./images/Grand-Canyon-high.png" alt="Grand canyon high" width="700" height="400">
 <img src="./images/Grand-Canyon-low.png" alt="Grand canyon low" width="700" height="400">
 
-> World-Volume of ~5.4 * 10^10 blocks rendered at around 60FPS on an integrated GPU (may look smaller, as the the unprecise elevation data leads to more blocks using up one height)
+> World-Volume of ~5.4 * 10^10 blocks rendered at around 60FPS on an integrated GPU. The terrain may appear smaller than expected because the limited vertical horizontal precision of the elevation data causes multiple blocks to form one terrain element (seems like 1 block, is actually like 64 (4x4x4)).
 > Grand canyon around lat. 36.1068 and lon. -112.1129
 
 ## Overview
@@ -21,7 +21,7 @@ Built using [VoxelVGl](https://github.com/I-had-a-bad-idea/VoxelVGL).
     - [Compiling the actual project](#compiling-the-actual-project)
   - [Running](#running)
   - [Project status](#project-status)
-    - [Problems](#problems)
+    - [Known problems](#known-problems)
   - [Licenses](#licenses)
     - [World data](#world-data)
       - [Elevation data](#elevation-data)
@@ -104,9 +104,34 @@ You will have a `client.exe` and a `server.exe`.
 3. Execute the `client.exe`
 4. Tell your friend to execute the `client.exe`
 5. (See that he cant connect because currently servers are only locally)
+> Server is started on `localhost:7000` and can theoretically be made avilable to other computers. Just currently there is no automatic way, therefore only local multiplayer is easialy possible.
 6. End client/server with `Esc` (never just close the server or you might lose the changes made to the world)
 
+## Project status
+Voxel-Earth is currently in development. The project is not yet complete, and there are still many features to be added. The current version is a proof of concept, and the code is not yet optimized for performance across all systems.
+
+### Known problems
+
+The biggest problem you will encounter, is that the land-cover data is currently fetched in huge 3°x3° tiles, which means that the game will download a lot of data at once. This is not a problem for the elevation data, as it is fetched in 256mx256m tile.
+This also means, that the first chunk will take a long time to be generated.
+
+The second biggest one is, that the world looks bad. This is caused by
+a) me using a custom renderer, which makes anti-aliasing and good lighting difficult
+b) the unprecise data (elevation data is accurate to ~4m and land-cover data to ~10m)
+c) the land-cover data currently being directly used for the blocks (which leads to 8 different block types)
+
+Then of course the server is only locally and not directly open to network.
+
+Lastly the source data is not precise to 1 meter, which leads to less detail, which could be fixed by interpolating, which is currently not done.
+
 ## Licenses
+
+This project is currently not licensed. You can use it for personal purposes, but you cannot redistribute it or use it commercially.
+To be more specific, you can use, modify, compile, and run the code for personal use, but you cannot redistribute it or use it commercially without prior permission.
+
+> The license for the code in this project is not yet finalized. I am currently considering using the MIT license, but I am not sure yet. If you want to use this code for commercial purposes, please contact me first.
+
+Real-world data used in this project is licensed under their respective licenses.
 
 ### World data
 All data is downloaded in real time.
