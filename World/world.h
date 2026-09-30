@@ -147,7 +147,7 @@ class World {
 
     void generate_chunks();
     void update_chunk_meshes();
-    void prefetch_elevation_tiles(int camera_chunk_x, int camera_chunk_z);
+    void prefetch_world_data_tiles(int camera_chunk_x, int camera_chunk_z);
     void fetch_elevation_tiles();
     void fetch_world_cover_tiles();
     TerrainColumn generate_terrain_column(int world_x, int world_z);
