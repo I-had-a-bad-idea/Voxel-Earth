@@ -26,6 +26,8 @@ constexpr float player_half_width = 0.3f;
 
 
 constexpr int MAX_NEW_REQUESTS_PER_FRAME = 16;
+constexpr unsigned int MAX_CHUNK_GENERATION_WORKERS = 4;
+constexpr int MAX_CHUNK_REMOVALS_PER_FRAME = 16;
 
 constexpr int RENDER_DISTANCE = 35;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
@@ -125,6 +127,8 @@ class World {
 
     std::vector<ChunkPos> new_requests;
     int next_new_request = 0;
+    std::queue<ChunkPos> chunk_removal_queue;
+    std::unordered_set<ChunkPos, ChunkPosHash> queued_chunk_removals;
 
     std::mutex generation_mutex;
     std::condition_variable generation_condition;

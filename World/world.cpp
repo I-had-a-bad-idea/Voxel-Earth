@@ -1,7 +1,6 @@
 #include "World.h"
 
 namespace {
-constexpr unsigned int MAX_CHUNK_GENERATION_WORKERS = 4;
 
 ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
     return ChunkLOD::LOD0;
@@ -515,8 +514,6 @@ void World::update_chunks() {
     std::vector<Mesh> old_meshes;
 
     if (camera_chunk_changed) {
-        // Remove chunks that are too far away.
-        std::vector<ChunkPos> chunks_to_remove;
         for (const auto& [pos, chunk] : chunks) {
             int dx = pos.x - camera_chunk_x;
             int dy = pos.y - camera_chunk_y;
@@ -528,29 +525,62 @@ void World::update_chunks() {
                 std::abs(dy) > VERTICAL_RENDER_DISTANCE ||
                 std::abs(dz) > RENDER_DISTANCE ||
                 underground_too_far) {
-                chunks_to_remove.push_back(pos);
-            }
-        }
-        for (const ChunkPos& pos : chunks_to_remove) {
-            {
-                std::lock_guard lock(mesh_update_mutex);
-                if (pending_mesh_updates.contains(pos)) {
-                    continue;
+                if (queued_chunk_removals.insert(pos).second) {
+                    chunk_removal_queue.push(pos);
                 }
             }
+        }
+    }
 
-            Chunk& chunk = chunks.at(pos);
-            if (chunk.object) {
-                if (chunk.in_scene) {
-                    scene.remove_object_from_scene(chunk.object.get());
-                }
-            }
-            if (chunk.mesh) {
-                old_meshes.push_back(std::move(*chunk.mesh));
-                chunk.mesh.reset();
-            }
-            chunks.erase(pos);
+    std::size_t removals_this_frame = 0;
+    std::size_t removal_checks_this_frame = 0;
+    const std::size_t max_removal_checks = MAX_CHUNK_REMOVALS_PER_FRAME * 2;
+    while (!chunk_removal_queue.empty() &&
+           removals_this_frame < MAX_CHUNK_REMOVALS_PER_FRAME &&
+           removal_checks_this_frame < max_removal_checks) {
+        const ChunkPos pos = chunk_removal_queue.front();
+        chunk_removal_queue.pop();
+        queued_chunk_removals.erase(pos);
+        ++removal_checks_this_frame;
+
+        auto chunk_it = chunks.find(pos);
+        if (chunk_it == chunks.end()) {
+            continue;
         }
+
+        const int dx = pos.x - camera_chunk_x;
+        const int dy = pos.y - camera_chunk_y;
+        const int dz = pos.z - camera_chunk_z;
+        const bool underground_too_far = pos.y < 0 &&
+            (std::abs(dx) > UNDERGROUND_STREAM_DISTANCE ||
+             std::abs(dz) > UNDERGROUND_STREAM_DISTANCE);
+        if (std::abs(dx) <= RENDER_DISTANCE &&
+            std::abs(dy) <= VERTICAL_RENDER_DISTANCE &&
+            std::abs(dz) <= RENDER_DISTANCE &&
+            !underground_too_far) {
+            continue;
+        }
+
+        {
+            std::lock_guard lock(mesh_update_mutex);
+            if (pending_mesh_updates.contains(pos)) {
+                if (queued_chunk_removals.insert(pos).second) {
+                    chunk_removal_queue.push(pos);
+                }
+                continue;
+            }
+        }
+
+        Chunk& chunk = chunk_it->second;
+        if (chunk.object && chunk.in_scene) {
+            scene.remove_object_from_scene(chunk.object.get());
+        }
+        if (chunk.mesh) {
+            old_meshes.push_back(std::move(*chunk.mesh));
+            chunk.mesh.reset();
+        }
+        chunks.erase(chunk_it);
+        ++removals_this_frame;
     }
 
     // Queue dirty CPU meshing and apply completed results on the render thread.
