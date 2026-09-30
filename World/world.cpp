@@ -1,6 +1,8 @@
 #include "World.h"
 
 namespace {
+constexpr unsigned int MAX_CHUNK_GENERATION_WORKERS = 4;
+
 ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
     return ChunkLOD::LOD0;
     // const int distance = std::max(std::abs(dx), std::max(std::abs(dy), std::abs(dz)));
@@ -31,7 +33,13 @@ World::World(Renderer& renderer_)
 {
     world_data_thread = std::thread(&World::fetch_elevation_tiles, this);
     world_cover_data_thread = std::thread(&World::fetch_world_cover_tiles, this);
-    generation_thread = std::thread(&World::generate_chunks, this);
+    const unsigned int worker_count = std::clamp(
+        std::thread::hardware_concurrency(), 1u, MAX_CHUNK_GENERATION_WORKERS
+    );
+    generation_threads.reserve(worker_count);
+    for (unsigned int worker = 0; worker < worker_count; ++worker) {
+        generation_threads.emplace_back(&World::generate_chunks, this);
+    }
     mesh_update_thread = std::thread(&World::update_chunk_meshes, this);
 }
 
@@ -40,8 +48,10 @@ World::~World() {
         std::lock_guard lock(generation_mutex);
         stop_generation = true;
     }
-    generation_condition.notify_one();
-    generation_thread.join();
+    generation_condition.notify_all();
+    for (std::thread& worker : generation_threads) {
+        worker.join();
+    }
 
     {
         std::lock_guard lock(terrain_cache_mutex);
@@ -284,17 +294,43 @@ TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
 }
 
 std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chunk_z) {
-    std::vector<TerrainColumn> columns(CHUNK_SIZE_X * CHUNK_SIZE_Z);
-    for (int x = 0; x < CHUNK_SIZE_X; ++x) {
-        for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
-            const ColumnPos pos{chunk_x * CHUNK_SIZE_X + x, chunk_z * CHUNK_SIZE_Z + z};
-            auto [it, inserted] = terrain_columns.try_emplace(pos);
-            if (inserted) {
-                it->second = generate_terrain_column(pos.x, pos.z);
-            }
-            columns[x + CHUNK_SIZE_X * z] = it->second;
+    const TerrainChunkPos chunk_pos{chunk_x, chunk_z};
+    {
+        std::unique_lock lock(terrain_columns_mutex);
+        terrain_columns_condition.wait(lock, [this, chunk_pos] {
+            return !terrain_chunks_generating.contains(chunk_pos);
+        });
+        if (auto it = terrain_columns.find(chunk_pos); it != terrain_columns.end()) {
+            return it->second;
         }
+        terrain_chunks_generating.insert(chunk_pos);
     }
+
+    std::vector<TerrainColumn> columns(CHUNK_SIZE_X * CHUNK_SIZE_Z);
+    try {
+        for (int x = 0; x < CHUNK_SIZE_X; ++x) {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
+                columns[x + CHUNK_SIZE_X * z] = generate_terrain_column(
+                    chunk_x * CHUNK_SIZE_X + x,
+                    chunk_z * CHUNK_SIZE_Z + z
+                );
+            }
+        }
+    } catch (...) {
+        {
+            std::lock_guard lock(terrain_columns_mutex);
+            terrain_chunks_generating.erase(chunk_pos);
+        }
+        terrain_columns_condition.notify_all();
+        throw;
+    }
+
+    {
+        std::lock_guard lock(terrain_columns_mutex);
+        terrain_columns.emplace(chunk_pos, columns);
+        terrain_chunks_generating.erase(chunk_pos);
+    }
+    terrain_columns_condition.notify_all();
     return columns;
 }
 

@@ -40,17 +40,17 @@ struct PlayerObject {
 };
 
 class World {
-    struct ColumnPos {
+    struct TerrainChunkPos {
         int x;
         int z;
 
-        bool operator==(const ColumnPos& other) const {
+        bool operator==(const TerrainChunkPos& other) const {
             return x == other.x && z == other.z;
         }
     };
 
-    struct ColumnPosHash {
-        std::size_t operator()(const ColumnPos& pos) const {
+    struct TerrainChunkPosHash {
+        std::size_t operator()(const TerrainChunkPos& pos) const {
             return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.z) << 1);
         }
     };
@@ -100,7 +100,10 @@ class World {
     std::unordered_map<ChunkPos, std::vector<PendingBlockEdit>, ChunkPosHash> pending_block_edits;
     
 
-    std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
+    std::unordered_map<TerrainChunkPos, std::vector<TerrainColumn>, TerrainChunkPosHash> terrain_columns;
+    std::mutex terrain_columns_mutex;
+    std::condition_variable terrain_columns_condition;
+    std::unordered_set<TerrainChunkPos, TerrainChunkPosHash> terrain_chunks_generating;
     std::unordered_map<ElevationTileCoordinate, ElevationTile, ElevationTileCoordinateHash> elevation_tiles;
     std::unordered_map<WorldCoverTileCoordinate, WorldCoverTile, WorldCoverTileCoordinateHash> world_cover_tiles;
 
@@ -134,7 +137,7 @@ class World {
     ChunkPos last_stream_camera_chunk {0, 0, 0};
     bool has_stream_camera_chunk {false};
     bool mesh_updates_needed {false};
-    std::thread generation_thread;
+    std::vector<std::thread> generation_threads;
     bool stop_generation {false};
 
     std::mutex mesh_update_mutex;
