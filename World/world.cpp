@@ -697,7 +697,9 @@ void World::update_chunks() {
 
         chunk.object->visible = sphere_in_frustum(scene.frustum, chunk_center, chunk_radius);
     }
-    prefetch_world_data_tiles(camera_chunk_x, camera_chunk_z);
+    if (camera_chunk_changed) {
+        prefetch_world_data_tiles(camera_chunk_x, camera_chunk_z);
+    }
 }
 
 void World::prefetch_world_data_tiles(int camera_chunk_x, int camera_chunk_z) {
