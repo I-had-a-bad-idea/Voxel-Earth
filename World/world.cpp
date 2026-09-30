@@ -113,9 +113,7 @@ void World::fetch_world_cover_tiles() {
 
         WorldCoverTile tile_data;
         try {
-            const int tile_lat = world_cover_tile_lat(coord.x);
-            const int tile_lon = world_cover_tile_lon(coord.y);
-            tile_data = world_cover_fetcher.world_cover_tile_fetch(tile_lat, tile_lon);
+            tile_data = world_cover_fetcher.world_cover_tile_fetch(ELEVATION_ZOOM, coord.x, coord.y);
         } catch (const std::exception& error) {
             std::cerr << "Failed to load world cover tile " << coord.x << ", " << coord.y
                       << ": " << error.what() << ". Using elevation-based surface.\n";
@@ -217,10 +215,8 @@ float World::get_elevation_height(ElevationTileCoordinate coord, int pixel_x, in
 }
 
 LandCover World::get_world_cover(GeoCoordinate geo) {
-    const WorldCoverTileCoordinate coord{
-        world_cover_tile_lat(geo.latitude),
-        world_cover_tile_lon(geo.longitude)
-    };
+    const ElevationTileCoordinate elevation_tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
+    const WorldCoverTileCoordinate coord{elevation_tile.x, elevation_tile.y};
 
     std::unique_lock lock(terrain_cache_mutex);
     auto it = world_cover_tiles.find(coord);
@@ -240,10 +236,9 @@ LandCover World::get_world_cover(GeoCoordinate geo) {
         return LandCover::NoData;
     }
 
-    const double x_fraction = (geo.longitude - coord.y) / 3.0;
-    const double y_fraction = (coord.x + 3.0 - geo.latitude) / 3.0;
-    const int pixel_x = std::clamp(static_cast<int>(x_fraction * tile.width), 0, tile.width - 1);
-    const int pixel_y = std::clamp(static_cast<int>(y_fraction * tile.height), 0, tile.height - 1);
+    const ElevationTileCoordinate pixel = geo_to_elevation_tile_pixel(geo, ELEVATION_ZOOM);
+    const int pixel_x = std::clamp(pixel.x, 0, tile.width - 1);
+    const int pixel_y = std::clamp(pixel.y, 0, tile.height - 1);
     return tile.get_land_cover(pixel_x, pixel_y);
 }
 
@@ -701,12 +696,15 @@ void World::setup() {
 
 void World::update(float delta_time) {
     update_chunks();
-    // Remove Elevation tiles that are too far away
+    const ElevationTileCoordinate camera_tile = geo_to_elevation_tile(
+        world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)),
+        ELEVATION_ZOOM
+    );
     std::vector<ElevationTileCoordinate> tiles_to_remove;
     std::lock_guard lock(terrain_cache_mutex);
     for (const auto& [coord, tile] : elevation_tiles) {
-        int dx = coord.x - geo_to_elevation_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).x;
-        int dz = coord.y - geo_to_elevation_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).y;
+        const int dx = coord.x - camera_tile.x;
+        const int dz = coord.y - camera_tile.y;
         if (std::abs(dx) > ELEVATION_TILE_CACHE_DISTANCE || std::abs(dz) > ELEVATION_TILE_CACHE_DISTANCE) {
             tiles_to_remove.push_back(coord);
         }
@@ -716,6 +714,17 @@ void World::update(float delta_time) {
         elevation_tiles.erase(coord);
     }
 
+    std::vector<WorldCoverTileCoordinate> world_cover_tiles_to_remove;
+    for (const auto& [coord, tile] : world_cover_tiles) {
+        const int dx = coord.x - camera_tile.x;
+        const int dy = coord.y - camera_tile.y;
+        if (std::abs(dx) > ELEVATION_TILE_CACHE_DISTANCE || std::abs(dy) > ELEVATION_TILE_CACHE_DISTANCE) {
+            world_cover_tiles_to_remove.push_back(coord);
+        }
+    }
+    for (const WorldCoverTileCoordinate& coord : world_cover_tiles_to_remove) {
+        world_cover_tiles.erase(coord);
+    }
 }
 
 Scene& World::get_scene() {

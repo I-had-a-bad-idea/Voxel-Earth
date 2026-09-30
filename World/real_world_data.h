@@ -106,10 +106,13 @@ class WorldCoverFetcher {
     public:
         WorldCoverFetcher();
         ~WorldCoverFetcher();
-        WorldCoverTile world_cover_tile_fetch(int tile_lat, int tile_lon);
+        WorldCoverTile world_cover_tile_fetch(int zoom, int tile_x, int tile_y);
     
     private:
         CURL* curl;
+        std::string cached_filename;
+        std::vector<uint8_t> cached_header;
+        uint64_t cached_file_size = 0;
 
         static size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp);
 };

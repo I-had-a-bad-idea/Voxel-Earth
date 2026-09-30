@@ -4,25 +4,40 @@
 #include <stb_image/stb_image.h>
 #include <tiffio.h>
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 namespace {
 struct TiffMemoryFile {
-    const std::vector<uint8_t>& data;
+    const std::vector<uint8_t>& header;
+    std::vector<uint8_t> data_range;
+    toff_t range_offset = 0;
+    toff_t file_size = 0;
     toff_t position = 0;
 };
 
 tmsize_t tiff_read(thandle_t handle, void* buffer, tmsize_t size) {
-    auto& file = *static_cast<TiffMemoryFile*>(handle); // Get reference to file (as a tiffmemoryfile)
+    auto& file = *static_cast<TiffMemoryFile*>(handle);
+    const uint8_t* source = nullptr;
+    toff_t available = 0;
+    if (file.position < file.header.size()) {
+        source = file.header.data() + file.position;
+        available = file.header.size() - file.position;
+    } else if (file.position >= file.range_offset &&
+               file.position - file.range_offset < file.data_range.size()) {
+        const toff_t range_position = file.position - file.range_offset;
+        source = file.data_range.data() + range_position;
+        available = file.data_range.size() - range_position;
+    } else {
+        return 0;
+    }
 
-    const toff_t remaining = file.data.size() - std::min(file.position, static_cast<toff_t>(file.data.size()));
-    const tmsize_t count = static_cast<tmsize_t>(std::min(static_cast<toff_t>(size), remaining));
-    
-    std::memcpy(buffer, file.data.data() + file.position, static_cast<size_t>(count));
+    const tmsize_t count = static_cast<tmsize_t>(std::min(static_cast<toff_t>(size), available));
+    std::memcpy(buffer, source, static_cast<size_t>(count));
     file.position += static_cast<toff_t>(count);
-
     return count;
 }
 
@@ -32,7 +47,7 @@ tmsize_t tiff_write(thandle_t, void*, tmsize_t) {
 
 toff_t tiff_seek(thandle_t handle, toff_t offset, int whence) {
     auto& file = *static_cast<TiffMemoryFile*>(handle);
-    const toff_t size = static_cast<toff_t>(file.data.size());
+    const toff_t size = file.file_size;
     toff_t position = file.position;
     if (whence == SEEK_SET) {
         position = offset;
@@ -56,7 +71,7 @@ int tiff_close(thandle_t) {
 }
 
 toff_t tiff_size(thandle_t handle) {
-    return static_cast<toff_t>(static_cast<TiffMemoryFile*>(handle)->data.size());
+    return static_cast<TiffMemoryFile*>(handle)->file_size;
 }
 
 int tiff_map(thandle_t, void**, toff_t*) {
@@ -64,6 +79,28 @@ int tiff_map(thandle_t, void**, toff_t*) {
 }
 
 void tiff_unmap(thandle_t, void*, toff_t) {}
+
+size_t read_content_range(char* contents, size_t size, size_t nmemb, void* userp) {
+    const size_t total = size * nmemb;
+    std::string line(contents, total);
+    std::transform(line.begin(), line.end(), line.begin(), [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+    });
+    const size_t slash = line.find('/');
+    if (line.rfind("content-range:", 0) == 0 && slash != std::string::npos) {
+        try {
+            *static_cast<uint64_t*>(userp) = std::stoull(line.substr(slash + 1));
+        } catch (...) {
+            return 0;
+        }
+    }
+    return total;
+}
+
+double tile_y_to_latitude(double tile_y, int zoom) {
+    const double n = static_cast<double>(1 << zoom);
+    return std::atan(std::sinh(PI * (1.0 - 2.0 * tile_y / n))) * 180.0 / PI;
+}
 }
 
 ElevationTileFetcher::ElevationTileFetcher() {
@@ -259,7 +296,14 @@ size_t WorldCoverFetcher::write_callback(void* contents, size_t size, size_t nme
 
 // See https://esa-worldcover.s3.eu-central-1.amazonaws.com/v100/2020/docs/WorldCover_PUM_V1.0.pdf#%5B%7B%22num%22%3A33%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C70%2C770%2C0%5D
 // at 3.1 (page 11)
-WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_lon) {
+WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int zoom, int tile_x, int tile_y) {
+    const double tiles_per_axis = static_cast<double>(1 << zoom);
+    const double west = static_cast<double>(tile_x) / tiles_per_axis * 360.0 - 180.0;
+    const double east = static_cast<double>(tile_x + 1) / tiles_per_axis * 360.0 - 180.0;
+    const double north = tile_y_to_latitude(tile_y, zoom);
+    const double south = tile_y_to_latitude(tile_y + 1.0, zoom);
+    const int tile_lat = world_cover_tile_lat((north + south) * 0.5);
+    const int tile_lon = world_cover_tile_lon((west + east) * 0.5);
     const std::string tile = make_world_cover_tile_name(tile_lat, tile_lon);
 
     const std::string filename =
@@ -269,28 +313,47 @@ WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_
         tile +
         "_Map.tif";
 
-    std::cout << "Fetching world cover tile " << tile << " from " << filename << std::endl;
+    constexpr toff_t HEADER_SIZE = 2 * 1024 * 1024;
+    auto download_range = [this, &filename](toff_t start, toff_t end, uint64_t& file_size) {
+        std::vector<uint8_t> bytes;
+        const std::string range = std::to_string(start) + "-" + std::to_string(end);
+        curl_easy_setopt(curl, CURLOPT_URL, filename.c_str());
+        curl_easy_setopt(curl, CURLOPT_RANGE, range.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &bytes);
+        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &read_content_range);
+        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &file_size);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "Voxel-Earth/0.0");
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
 
-    std::vector<uint8_t> tiff_data;
-    curl_easy_setopt(curl, CURLOPT_URL, filename.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &tiff_data);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Voxel-Earth/0.0");
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
+        const CURLcode result = curl_easy_perform(curl);
+        long response_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+        curl_easy_setopt(curl, CURLOPT_RANGE, nullptr);
+        if (result != CURLE_OK) {
+            throw std::runtime_error(curl_easy_strerror(result));
+        }
+        if (response_code != 206) {
+            throw std::runtime_error("HTTP range request returned " + std::to_string(response_code));
+        }
+        if (bytes.size() != end - start + 1) {
+            throw std::runtime_error("Incomplete land cover range response");
+        }
+        return bytes;
+    };
 
-    const CURLcode result = curl_easy_perform(curl);
-    long response_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-    if (result != CURLE_OK) {
-        throw std::runtime_error(curl_easy_strerror(result));
+    if (cached_filename != filename) {
+        uint64_t file_size = 0;
+        cached_header = download_range(0, HEADER_SIZE - 1, file_size);
+        if (file_size == 0 || cached_header.size() < HEADER_SIZE) {
+            throw std::runtime_error("Invalid land cover GeoTIFF range metadata");
+        }
+        cached_filename = filename;
+        cached_file_size = file_size;
     }
-    if (response_code != 200) {
-        throw std::runtime_error("HTTP error " + std::to_string(response_code));
-    }
-    std::cout << "Downloaded land cover GeoTIFF for tile " << tile << " (" << tiff_data.size() << " bytes)" << std::endl;
-    
-    TiffMemoryFile memory_file{tiff_data};
+
+    TiffMemoryFile memory_file{cached_header, {}, 0, cached_file_size};
     TIFF* tiff = TIFFClientOpen(
         filename.c_str(), "r", &memory_file,
         &tiff_read, &tiff_write, &tiff_seek, &tiff_close, &tiff_size,
@@ -299,8 +362,6 @@ WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_
     if (!tiff) {
         throw std::runtime_error("Failed to open downloaded land cover GeoTIFF");
     }
-
-    std::cout << "Opened land cover GeoTIFF for tile " << tile << std::endl;
 
     uint32_t width = 0;
     uint32_t height = 0;
@@ -317,40 +378,73 @@ WorldCoverTile WorldCoverFetcher::world_cover_tile_fetch(int tile_lat, int tile_
         throw std::runtime_error("Unsupported land cover GeoTIFF format");
     }
 
-    WorldCoverTile tile_data;
-    tile_data.width = static_cast<int>(width);
-    tile_data.height = static_cast<int>(height);
-    tile_data.land_cover.resize(static_cast<size_t>(width) * height);
-
     uint32_t tile_width = 0;
     uint32_t tile_height = 0;
-
-    if (!TIFFGetField(tiff, TIFFTAG_TILEWIDTH, &tile_width) || !TIFFGetField(tiff, TIFFTAG_TILELENGTH, &tile_height)) {
+    toff_t* tile_offsets = nullptr;
+    toff_t* tile_byte_counts = nullptr;
+    if (!TIFFGetField(tiff, TIFFTAG_TILEWIDTH, &tile_width) ||
+        !TIFFGetField(tiff, TIFFTAG_TILELENGTH, &tile_height) ||
+        !TIFFGetField(tiff, TIFFTAG_TILEOFFSETS, &tile_offsets) ||
+        !TIFFGetField(tiff, TIFFTAG_TILEBYTECOUNTS, &tile_byte_counts)) {
         TIFFClose(tiff);
-        throw std::runtime_error("GeoTIFF is tiled but tile dimensions are unavailable");
+        throw std::runtime_error("GeoTIFF tile index is unavailable");
     }
 
-    std::vector<uint8_t> tile_buffer(static_cast<size_t>(tile_width) * tile_height);
-    for (uint32_t y = 0; y < height; y += tile_height) {
-        for (uint32_t x = 0; x < width; x += tile_width) {
+    const int source_x0 = std::clamp(static_cast<int>(std::floor((west - tile_lon) / 3.0 * width)), 0, static_cast<int>(width) - 1);
+    const int source_x1 = std::clamp(static_cast<int>(std::ceil((east - tile_lon) / 3.0 * width)) - 1, source_x0, static_cast<int>(width) - 1);
+    const int source_y0 = std::clamp(static_cast<int>(std::floor((tile_lat + 3.0 - north) / 3.0 * height)), 0, static_cast<int>(height) - 1);
+    const int source_y1 = std::clamp(static_cast<int>(std::ceil((tile_lat + 3.0 - south) / 3.0 * height)) - 1, source_y0, static_cast<int>(height) - 1);
 
-            if (TIFFReadTile(tiff, tile_buffer.data(), x, y, 0, 0) < 0) {
-                TIFFClose(tiff);
-                throw std::runtime_error("Failed to read land cover GeoTIFF tile");
+    toff_t range_start = cached_file_size;
+    toff_t range_end = 0;
+    for (uint32_t y = static_cast<uint32_t>(source_y0) / tile_height * tile_height;
+         y <= static_cast<uint32_t>(source_y1); y += tile_height) {
+        for (uint32_t x = static_cast<uint32_t>(source_x0) / tile_width * tile_width;
+             x <= static_cast<uint32_t>(source_x1); x += tile_width) {
+            const uint32_t index = TIFFComputeTile(tiff, x, y, 0, 0);
+            range_start = std::min(range_start, tile_offsets[index]);
+            range_end = std::max(range_end, tile_offsets[index] + tile_byte_counts[index] - 1);
+        }
+    }
+
+    uint64_t ignored_file_size = 0;
+    memory_file.range_offset = range_start;
+    memory_file.data_range = download_range(range_start, range_end, ignored_file_size);
+
+    WorldCoverTile tile_data;
+    tile_data.width = 256;
+    tile_data.height = 256;
+    tile_data.land_cover.resize(256 * 256, static_cast<uint8_t>(LandCover::NoData));
+    std::unordered_map<uint32_t, std::vector<uint8_t>> decoded_tiles;
+    for (int output_y = 0; output_y < 256; ++output_y) {
+        const double latitude = tile_y_to_latitude(tile_y + (output_y + 0.5) / 256.0, zoom);
+        for (int output_x = 0; output_x < 256; ++output_x) {
+            const double longitude = (tile_x + (output_x + 0.5) / 256.0) / tiles_per_axis * 360.0 - 180.0;
+            if (world_cover_tile_lat(latitude) != tile_lat || world_cover_tile_lon(longitude) != tile_lon) {
+                continue;
             }
 
-            const uint32_t copy_width = std::min(tile_width, width - x);
-            const uint32_t copy_height = std::min(tile_height, height - y);
-
-            for (uint32_t ty = 0; ty < copy_height; ++ty) {
-                uint8_t* dst = tile_data.land_cover.data() + static_cast<size_t>(y + ty) * width + x;
-                const uint8_t* src = tile_buffer.data() + static_cast<size_t>(ty) * tile_width;
-
-                std::memcpy(dst, src, copy_width);
+            const int source_x = std::clamp(static_cast<int>((longitude - tile_lon) / 3.0 * width), 0, static_cast<int>(width) - 1);
+            const int source_y = std::clamp(static_cast<int>((tile_lat + 3.0 - latitude) / 3.0 * height), 0, static_cast<int>(height) - 1);
+            const uint32_t block_x = static_cast<uint32_t>(source_x) / tile_width * tile_width;
+            const uint32_t block_y = static_cast<uint32_t>(source_y) / tile_height * tile_height;
+            const uint32_t index = TIFFComputeTile(tiff, block_x, block_y, 0, 0);
+            auto [block, inserted] = decoded_tiles.try_emplace(index);
+            if (inserted) {
+                block->second.resize(static_cast<size_t>(tile_width) * tile_height);
+                if (TIFFReadTile(tiff, block->second.data(), block_x, block_y, 0, 0) < 0) {
+                    TIFFClose(tiff);
+                    throw std::runtime_error("Failed to read cropped land cover data");
+                }
             }
+            const size_t source_index = static_cast<size_t>(source_y - static_cast<int>(block_y)) * tile_width +
+                                        source_x - static_cast<int>(block_x);
+            tile_data.land_cover[output_y * 256 + output_x] = block->second[source_index];
         }
     }
 
     TIFFClose(tiff);
+    std::cout << "Fetched land cover tile " << tile << " for elevation tile " << tile_x << ", " << tile_y
+              << " (" << memory_file.data_range.size() << " bytes of raster data)" << std::endl;
     return tile_data;
 }
