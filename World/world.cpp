@@ -25,6 +25,41 @@ ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
     // }
     // return ChunkLOD::LOD6;
 }
+
+std::size_t hash_mesh_data(const MeshData& mesh_data) {
+    std::size_t hash = mesh_data.vertices.size();
+    auto combine = [&hash](uint32_t value) {
+        hash ^= std::hash<uint32_t>{}(value) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+    };
+
+    for (const Vertex& vertex : mesh_data.vertices) {
+        combine(vertex.pos);
+        combine(vertex.normal);
+        combine(vertex.uv);
+        combine(vertex.atlas_tile);
+    }
+    combine(static_cast<uint32_t>(mesh_data.indices.size()));
+    for (uint32_t index : mesh_data.indices) {
+        combine(index);
+    }
+    return hash;
+}
+
+bool same_mesh_data(const MeshData& lhs, const MeshData& rhs) {
+    if (lhs.vertices.size() != rhs.vertices.size() || lhs.indices != rhs.indices) {
+        return false;
+    }
+
+    for (std::size_t index = 0; index < lhs.vertices.size(); ++index) {
+        const Vertex& left = lhs.vertices[index];
+        const Vertex& right = rhs.vertices[index];
+        if (left.pos != right.pos || left.normal != right.normal ||
+            left.uv != right.uv || left.atlas_tile != right.atlas_tile) {
+            return false;
+        }
+    }
+    return true;
+}
 }
 
 World::World(Renderer& renderer_)
