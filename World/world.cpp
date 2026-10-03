@@ -155,18 +155,25 @@ void World::generate_chunks() {
             generation_queue.pop();
         }
 
-        // Noise depends only on horizontal position, so reuse it across vertical chunks.
-        std::vector<TerrainColumn> terrain = get_chunk_terrain_columns(pos.x, pos.z);
-        auto chunk = std::make_unique<Chunk>(
-            terrain,
-            pos.x,
-            pos.y,
-            pos.z
-        );
+        // Data depends only on horizontal position, so reuse it across vertical chunks.
+        const auto terrain = get_chunk_terrain_columns(pos.x, pos.z);
         const ChunkLOD lod = lod_for_chunk_distance(
             pos.x - generation_camera_chunk_x.load(std::memory_order_relaxed),
             pos.y - generation_camera_chunk_y.load(std::memory_order_relaxed),
             pos.z - generation_camera_chunk_z.load(std::memory_order_relaxed)
+        );
+
+        if (pos.y * CHUNK_SIZE_Y > terrain->max_height) {
+            std::lock_guard lock(generation_mutex);
+            completed_chunks.push({pos, nullptr, lod, {}});
+            continue;
+        }
+
+        auto chunk = std::make_unique<Chunk>(
+            terrain->columns,
+            pos.x,
+            pos.y,
+            pos.z
         );
         MeshData mesh_data = chunk->generate_mesh_data(lod);
 
@@ -292,7 +299,7 @@ TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
     return column;
 }
 
-std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chunk_z) {
+std::shared_ptr<const World::TerrainChunkData> World::get_chunk_terrain_columns(int chunk_x, int chunk_z) {
     const TerrainChunkPos chunk_pos{chunk_x, chunk_z};
     {
         std::unique_lock lock(terrain_columns_mutex);
@@ -305,14 +312,17 @@ std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chu
         terrain_chunks_generating.insert(chunk_pos);
     }
 
-    std::vector<TerrainColumn> columns(CHUNK_SIZE_X * CHUNK_SIZE_Z);
+    auto terrain = std::make_shared<TerrainChunkData>();
+    terrain->columns.resize(CHUNK_SIZE_X * CHUNK_SIZE_Z);
     try {
         for (int x = 0; x < CHUNK_SIZE_X; ++x) {
             for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
-                columns[x + CHUNK_SIZE_X * z] = generate_terrain_column(
+                TerrainColumn& column = terrain->columns[x + CHUNK_SIZE_X * z];
+                column = generate_terrain_column(
                     chunk_x * CHUNK_SIZE_X + x,
                     chunk_z * CHUNK_SIZE_Z + z
                 );
+                terrain->max_height = std::max(terrain->max_height, column.height);
             }
         }
     } catch (...) {
@@ -326,11 +336,11 @@ std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chu
 
     {
         std::lock_guard lock(terrain_columns_mutex);
-        terrain_columns.emplace(chunk_pos, columns);
+        terrain_columns.emplace(chunk_pos, terrain);
         terrain_chunks_generating.erase(chunk_pos);
     }
     terrain_columns_condition.notify_all();
-    return columns;
+    return terrain;
 }
 
 void World::queue_chunk_generation(ChunkPos pos) {
@@ -350,10 +360,10 @@ void World::queue_chunk_generation(ChunkPos pos) {
 void World::process_completed_chunks() { // on main thread
     GeneratedChunk generated;
     std::size_t uploaded_chunks = 0;
+    std::size_t processed_chunks = 0;
 
-    // Keep generation from building an unbounded queue while allowing the
-    // initial visible area to stream in at several chunks per frame.
-    while (uploaded_chunks < 16) {
+    // Bound both uploads and empty results so queue draining cannot stall a frame.
+    while (uploaded_chunks < 16 && processed_chunks < 64) {
         {
             std::lock_guard lock(generation_mutex);
             if (completed_chunks.empty()) {
@@ -364,9 +374,10 @@ void World::process_completed_chunks() { // on main thread
             generated = std::move(completed_chunks.front());
             completed_chunks.pop();
         }
+        ++processed_chunks;
 
         requested_chunks.erase(generated.pos);
-        if (chunks.contains(generated.pos)) {
+        if (!generated.chunk || chunks.contains(generated.pos)) {
             continue;
         }
 

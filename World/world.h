@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <condition_variable>
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -57,6 +58,11 @@ class World {
         }
     };
 
+    struct TerrainChunkData {
+        std::vector<TerrainColumn> columns;
+        int max_height = SEA_LEVEL;
+    };
+
     struct GeneratedChunk {
         ChunkPos pos;
         std::unique_ptr<Chunk> chunk;
@@ -102,7 +108,7 @@ class World {
     std::unordered_map<ChunkPos, std::vector<PendingBlockEdit>, ChunkPosHash> pending_block_edits;
     
 
-    std::unordered_map<TerrainChunkPos, std::vector<TerrainColumn>, TerrainChunkPosHash> terrain_columns;
+    std::unordered_map<TerrainChunkPos, std::shared_ptr<const TerrainChunkData>, TerrainChunkPosHash> terrain_columns;
     std::mutex terrain_columns_mutex;
     std::condition_variable terrain_columns_condition;
     std::unordered_set<TerrainChunkPos, TerrainChunkPosHash> terrain_chunks_generating;
@@ -158,7 +164,7 @@ class World {
     void fetch_elevation_tiles();
     void fetch_world_cover_tiles();
     TerrainColumn generate_terrain_column(int world_x, int world_z);
-    std::vector<TerrainColumn> get_chunk_terrain_columns(int chunk_x, int chunk_z);
+    std::shared_ptr<const TerrainChunkData> get_chunk_terrain_columns(int chunk_x, int chunk_z);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
     float get_elevation_height(ElevationTileCoordinate coord, int pixel_x, int pixel_y);
