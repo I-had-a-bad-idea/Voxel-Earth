@@ -378,6 +378,25 @@ std::shared_ptr<const World::TerrainChunkData> World::get_chunk_terrain_columns(
     return terrain;
 }
 
+std::shared_ptr<Mesh> World::get_or_create_chunk_mesh(MeshData&& mesh_data) {
+    const std::size_t hash = hash_mesh_data(mesh_data);
+    auto& candidates = chunk_mesh_cache[hash];
+    for (auto candidate = candidates.begin(); candidate != candidates.end();) {
+        if (std::shared_ptr<Mesh> mesh = candidate->lock()) {
+            if (same_mesh_data(mesh->data, mesh_data)) {
+                return mesh;
+            }
+            ++candidate;
+        } else {
+            candidate = candidates.erase(candidate);
+        }
+    }
+
+    std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>(renderer.load_mesh(std::move(mesh_data)));
+    candidates.push_back(mesh);
+    return mesh;
+}
+
 void World::queue_chunk_generation(ChunkPos pos) {
     if (chunks.contains(pos) || requested_chunks.contains(pos)) {
         return;
@@ -451,7 +470,7 @@ void World::process_completed_chunks() { // on main thread
         }
 
 
-        chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(generated.mesh_data)));
+        chunk.mesh = get_or_create_chunk_mesh(std::move(generated.mesh_data));
 
         chunk.dirty = false;
         chunk.object = std::make_unique<Object>(
@@ -557,7 +576,7 @@ void World::update_chunks() {
     process_completed_chunks();
 
 
-    std::vector<Mesh> old_meshes;
+    std::vector<std::shared_ptr<Mesh>> old_meshes;
 
     if (camera_chunk_changed) {
         for (const auto& [pos, chunk] : chunks) {
@@ -622,8 +641,7 @@ void World::update_chunks() {
             scene.remove_object_from_scene(chunk.object.get());
         }
         if (chunk.mesh) {
-            old_meshes.push_back(std::move(*chunk.mesh));
-            chunk.mesh.reset();
+            old_meshes.push_back(std::move(chunk.mesh));
         }
         chunks.erase(chunk_it);
         ++removals_this_frame;
@@ -656,8 +674,7 @@ void World::update_chunks() {
                 }
             }
             if (chunk.mesh) {
-                old_meshes.push_back(std::move(*chunk.mesh));
-                chunk.mesh.reset();
+                old_meshes.push_back(std::move(chunk.mesh));
             }
 
             if (empty_chunk) {
@@ -669,7 +686,7 @@ void World::update_chunks() {
                 continue;
             }
 
-            chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(mesh_data)));
+            chunk.mesh = get_or_create_chunk_mesh(std::move(mesh_data));
             if (!chunk.object) {
                 chunk.object = std::make_unique<Object>(
                     chunk.mesh.get(),
@@ -714,7 +731,28 @@ void World::update_chunks() {
 
     // All new meshes have now been loaded.
     // Now the old Mesh objects can safely be destroyed.
-    renderer.destroy_meshes(old_meshes);
+    std::vector<Mesh> meshes_to_destroy;
+    for (const std::shared_ptr<Mesh>& mesh : old_meshes) {
+        if (mesh.use_count() != 1) {
+            continue;
+        }
+
+        const std::size_t hash = hash_mesh_data(mesh->data);
+        auto cache_entry = chunk_mesh_cache.find(hash);
+        if (cache_entry != chunk_mesh_cache.end()) {
+            auto& candidates = cache_entry->second;
+            candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&mesh](const std::weak_ptr<Mesh>& candidate) {
+                const std::shared_ptr<Mesh> cached_mesh = candidate.lock();
+                return !cached_mesh || cached_mesh.get() == mesh.get();
+            }), candidates.end());
+            if (candidates.empty()) {
+                chunk_mesh_cache.erase(cache_entry);
+            }
+        }
+
+        meshes_to_destroy.push_back(std::move(*mesh));
+    }
+    renderer.destroy_meshes(std::move(meshes_to_destroy));
 
 
     // Frustum culling

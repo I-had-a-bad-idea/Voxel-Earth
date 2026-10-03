@@ -71,7 +71,7 @@ class Chunk {
         Chunk();
 
         std::unique_ptr<Object> object;
-        std::unique_ptr<Mesh> mesh;
+        std::shared_ptr<Mesh> mesh;
         bool in_scene = false;
         bool dirty = true; // whether the chunk mesh needs to be updated
         ChunkLOD lod = ChunkLOD::LOD0;

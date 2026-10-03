@@ -106,6 +106,7 @@ class World {
     
     std::unordered_map<ChunkPos, Chunk, ChunkPosHash> chunks;
     std::unordered_map<ChunkPos, std::vector<PendingBlockEdit>, ChunkPosHash> pending_block_edits;
+    std::unordered_map<std::size_t, std::vector<std::weak_ptr<Mesh>>> chunk_mesh_cache;
     
 
     std::unordered_map<TerrainChunkPos, std::shared_ptr<const TerrainChunkData>, TerrainChunkPosHash> terrain_columns;
@@ -165,6 +166,7 @@ class World {
     void fetch_world_cover_tiles();
     TerrainColumn generate_terrain_column(int world_x, int world_z);
     std::shared_ptr<const TerrainChunkData> get_chunk_terrain_columns(int chunk_x, int chunk_z);
+    std::shared_ptr<Mesh> get_or_create_chunk_mesh(MeshData&& mesh_data);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
     float get_elevation_height(ElevationTileCoordinate coord, int pixel_x, int pixel_y);
