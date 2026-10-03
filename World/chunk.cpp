@@ -83,6 +83,8 @@ Chunk::Chunk(const std::vector<TerrainColumn>& terrain_columns,
             column_tops[x + CHUNK_SIZE_X * z] = static_cast<uint8_t>(std::max(0, local_top));
         }
     }
+
+    update_solid_face_mask();
 }
 
 MeshData Chunk::generate_mesh_data(ChunkLOD requested_lod) {
@@ -94,6 +96,65 @@ MeshData Chunk::generate_mesh_data(ChunkLOD requested_lod) {
 
 std::vector<BlockType> Chunk::copy_blocks() const {
     return blocks;
+}
+
+bool Chunk::has_fully_solid_face(ChunkFace face) const {
+    return (solid_face_mask & (1u << static_cast<uint8_t>(face))) != 0;
+}
+
+void Chunk::update_solid_face_mask() {
+    solid_face_mask = 0;
+
+    for (uint8_t face_index = 0; face_index < 6; ++face_index) {
+        const ChunkFace face = static_cast<ChunkFace>(face_index);
+        bool fully_solid = true;
+
+        for (int first = 0; first < CHUNK_SIZE_Y && fully_solid; ++first) {
+            for (int second = 0; second < CHUNK_SIZE_Z; ++second) {
+                int x = 0;
+                int y = first;
+                int z = second;
+
+                switch (face) {
+                    case ChunkFace::NegX:
+                        x = 0;
+                        break;
+                    case ChunkFace::PosX:
+                        x = CHUNK_SIZE_X - 1;
+                        break;
+                    case ChunkFace::NegY:
+                        y = 0;
+                        x = first;
+                        z = second;
+                        break;
+                    case ChunkFace::PosY:
+                        y = CHUNK_SIZE_Y - 1;
+                        x = first;
+                        z = second;
+                        break;
+                    case ChunkFace::NegZ:
+                        z = 0;
+                        x = first;
+                        y = second;
+                        break;
+                    case ChunkFace::PosZ:
+                        z = CHUNK_SIZE_Z - 1;
+                        x = first;
+                        y = second;
+                        break;
+                }
+
+                if (get_block(x, y, z) == BlockType::Air) {
+                    fully_solid = false;
+                    break;
+                }
+            }
+        }
+
+        if (fully_solid) {
+            solid_face_mask |= static_cast<uint8_t>(1u << face_index);
+        }
+    }
 }
 
 MeshData Chunk::generate_mesh_data(const std::vector<BlockType>& source_blocks,

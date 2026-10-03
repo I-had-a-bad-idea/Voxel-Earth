@@ -690,9 +690,29 @@ void World::update_chunks() {
     const float half_z = CHUNK_SIZE_Z * 0.5f;
     const float chunk_radius = std::sqrt(half_x * half_x + half_y * half_y + half_z * half_z);
 
+    auto neighbor_face_is_solid = [this](ChunkPos neighbor_pos, ChunkFace face) {
+        const auto neighbor = chunks.find(neighbor_pos);
+        return neighbor != chunks.end() && neighbor->second.has_fully_solid_face(face);
+    };
+
     for (const auto& [pos, chunk] : chunks) {
         if (!chunk.object) {
             continue;
+        }
+        if (camera_chunk_changed) {
+            const bool is_camera_chunk = pos.x == camera_chunk_x &&
+                pos.y == camera_chunk_y && pos.z == camera_chunk_z;
+            const bool fully_surrounded = !is_camera_chunk &&
+                neighbor_face_is_solid({pos.x - 1, pos.y, pos.z}, ChunkFace::PosX) &&
+                neighbor_face_is_solid({pos.x + 1, pos.y, pos.z}, ChunkFace::NegX) &&
+                neighbor_face_is_solid({pos.x, pos.y - 1, pos.z}, ChunkFace::PosY) &&
+                neighbor_face_is_solid({pos.x, pos.y + 1, pos.z}, ChunkFace::NegY) &&
+                neighbor_face_is_solid({pos.x, pos.y, pos.z - 1}, ChunkFace::PosZ) &&
+                neighbor_face_is_solid({pos.x, pos.y, pos.z + 1}, ChunkFace::NegZ);
+            if (fully_surrounded) {
+                chunk.object->visible = false;
+                continue;
+            }
         }
 
         glm::vec3 chunk_center((pos.x + 0.5f) * CHUNK_SIZE_X, (pos.y + 0.5f) * CHUNK_SIZE_Y, (pos.z + 0.5f) * CHUNK_SIZE_Z);
