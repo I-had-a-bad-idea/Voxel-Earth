@@ -10,6 +10,15 @@
 #define CHUNK_SIZE_Y 64
 constexpr int SEA_LEVEL = CHUNK_SIZE_Y / 4;
 
+enum class ChunkFace : uint8_t {
+    NegX,
+    PosX,
+    NegY,
+    PosY,
+    NegZ,
+    PosZ,
+};
+
 enum class ChunkLOD : char {
     LOD0,
     LOD1,
@@ -52,6 +61,9 @@ class Chunk {
     std::vector<BlockType> blocks;
     std::vector<uint8_t> column_tops;
     bool has_blocks = false;
+    uint8_t solid_face_mask = 0;
+
+    void update_solid_face_mask();
     // the highest block in each collum (used to be mroe efficient when doing stuff (e.g. generating mesh))
 
     public:
@@ -59,7 +71,7 @@ class Chunk {
         Chunk();
 
         std::unique_ptr<Object> object;
-        std::unique_ptr<Mesh> mesh;
+        std::shared_ptr<Mesh> mesh;
         bool in_scene = false;
         bool dirty = true; // whether the chunk mesh needs to be updated
         ChunkLOD lod = ChunkLOD::LOD0;
@@ -69,13 +81,23 @@ class Chunk {
                            ChunkLOD requested_lod = ChunkLOD::LOD0);
 
         std::vector<BlockType> copy_blocks() const;
+        bool has_fully_solid_face(ChunkFace face) const;
 
         inline BlockType get_block(int x, int y, int z) {
             return blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)];
         }
         
         inline void set_block(int x, int y, int z, BlockType block) {
-            blocks[x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y)] = block;
+            const int block_index = x + CHUNK_SIZE_X * (z + CHUNK_SIZE_Z * y);
+            const BlockType previous_block = blocks[block_index];
+            blocks[block_index] = block;
+
+            if (previous_block != block &&
+                (x == 0 || x == CHUNK_SIZE_X - 1 ||
+                 y == 0 || y == CHUNK_SIZE_Y - 1 ||
+                 z == 0 || z == CHUNK_SIZE_Z - 1)) {
+                update_solid_face_mask();
+            }
 
             if (block != BlockType::Air) {
                 has_blocks = true;

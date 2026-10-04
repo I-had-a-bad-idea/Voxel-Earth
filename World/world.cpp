@@ -25,6 +25,41 @@ ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
     // }
     // return ChunkLOD::LOD6;
 }
+
+std::size_t hash_mesh_data(const MeshData& mesh_data) {
+    std::size_t hash = mesh_data.vertices.size();
+    auto combine = [&hash](uint32_t value) {
+        hash ^= std::hash<uint32_t>{}(value) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+    };
+
+    for (const Vertex& vertex : mesh_data.vertices) {
+        combine(vertex.pos);
+        combine(vertex.normal);
+        combine(vertex.uv);
+        combine(vertex.atlas_tile);
+    }
+    combine(static_cast<uint32_t>(mesh_data.indices.size()));
+    for (uint32_t index : mesh_data.indices) {
+        combine(index);
+    }
+    return hash;
+}
+
+bool same_mesh_data(const MeshData& lhs, const MeshData& rhs) {
+    if (lhs.vertices.size() != rhs.vertices.size() || lhs.indices != rhs.indices) {
+        return false;
+    }
+
+    for (std::size_t index = 0; index < lhs.vertices.size(); ++index) {
+        const Vertex& left = lhs.vertices[index];
+        const Vertex& right = rhs.vertices[index];
+        if (left.pos != right.pos || left.normal != right.normal ||
+            left.uv != right.uv || left.atlas_tile != right.atlas_tile) {
+            return false;
+        }
+    }
+    return true;
+}
 }
 
 World::World(Renderer& renderer_)
@@ -155,18 +190,25 @@ void World::generate_chunks() {
             generation_queue.pop();
         }
 
-        // Noise depends only on horizontal position, so reuse it across vertical chunks.
-        std::vector<TerrainColumn> terrain = get_chunk_terrain_columns(pos.x, pos.z);
-        auto chunk = std::make_unique<Chunk>(
-            terrain,
-            pos.x,
-            pos.y,
-            pos.z
-        );
+        // Data depends only on horizontal position, so reuse it across vertical chunks.
+        const auto terrain = get_chunk_terrain_columns(pos.x, pos.z);
         const ChunkLOD lod = lod_for_chunk_distance(
             pos.x - generation_camera_chunk_x.load(std::memory_order_relaxed),
             pos.y - generation_camera_chunk_y.load(std::memory_order_relaxed),
             pos.z - generation_camera_chunk_z.load(std::memory_order_relaxed)
+        );
+
+        if (pos.y * CHUNK_SIZE_Y > terrain->max_height) {
+            std::lock_guard lock(generation_mutex);
+            completed_chunks.push({pos, nullptr, lod, {}});
+            continue;
+        }
+
+        auto chunk = std::make_unique<Chunk>(
+            terrain->columns,
+            pos.x,
+            pos.y,
+            pos.z
         );
         MeshData mesh_data = chunk->generate_mesh_data(lod);
 
@@ -292,7 +334,7 @@ TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
     return column;
 }
 
-std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chunk_z) {
+std::shared_ptr<const World::TerrainChunkData> World::get_chunk_terrain_columns(int chunk_x, int chunk_z) {
     const TerrainChunkPos chunk_pos{chunk_x, chunk_z};
     {
         std::unique_lock lock(terrain_columns_mutex);
@@ -305,14 +347,17 @@ std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chu
         terrain_chunks_generating.insert(chunk_pos);
     }
 
-    std::vector<TerrainColumn> columns(CHUNK_SIZE_X * CHUNK_SIZE_Z);
+    auto terrain = std::make_shared<TerrainChunkData>();
+    terrain->columns.resize(CHUNK_SIZE_X * CHUNK_SIZE_Z);
     try {
         for (int x = 0; x < CHUNK_SIZE_X; ++x) {
             for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
-                columns[x + CHUNK_SIZE_X * z] = generate_terrain_column(
+                TerrainColumn& column = terrain->columns[x + CHUNK_SIZE_X * z];
+                column = generate_terrain_column(
                     chunk_x * CHUNK_SIZE_X + x,
                     chunk_z * CHUNK_SIZE_Z + z
                 );
+                terrain->max_height = std::max(terrain->max_height, column.height);
             }
         }
     } catch (...) {
@@ -326,11 +371,30 @@ std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chu
 
     {
         std::lock_guard lock(terrain_columns_mutex);
-        terrain_columns.emplace(chunk_pos, columns);
+        terrain_columns.emplace(chunk_pos, terrain);
         terrain_chunks_generating.erase(chunk_pos);
     }
     terrain_columns_condition.notify_all();
-    return columns;
+    return terrain;
+}
+
+std::shared_ptr<Mesh> World::get_or_create_chunk_mesh(MeshData&& mesh_data) {
+    const std::size_t hash = hash_mesh_data(mesh_data);
+    auto& candidates = chunk_mesh_cache[hash];
+    for (auto candidate = candidates.begin(); candidate != candidates.end();) {
+        if (std::shared_ptr<Mesh> mesh = candidate->lock()) {
+            if (same_mesh_data(mesh->data, mesh_data)) {
+                return mesh;
+            }
+            ++candidate;
+        } else {
+            candidate = candidates.erase(candidate);
+        }
+    }
+
+    std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>(renderer.load_mesh(std::move(mesh_data)));
+    candidates.push_back(mesh);
+    return mesh;
 }
 
 void World::queue_chunk_generation(ChunkPos pos) {
@@ -350,10 +414,10 @@ void World::queue_chunk_generation(ChunkPos pos) {
 void World::process_completed_chunks() { // on main thread
     GeneratedChunk generated;
     std::size_t uploaded_chunks = 0;
+    std::size_t processed_chunks = 0;
 
-    // Keep generation from building an unbounded queue while allowing the
-    // initial visible area to stream in at several chunks per frame.
-    while (uploaded_chunks < 16) {
+    // Bound both uploads and empty results so queue draining cannot stall a frame.
+    while (uploaded_chunks < 16 && processed_chunks < 64) {
         {
             std::lock_guard lock(generation_mutex);
             if (completed_chunks.empty()) {
@@ -364,9 +428,10 @@ void World::process_completed_chunks() { // on main thread
             generated = std::move(completed_chunks.front());
             completed_chunks.pop();
         }
+        ++processed_chunks;
 
         requested_chunks.erase(generated.pos);
-        if (chunks.contains(generated.pos)) {
+        if (!generated.chunk || chunks.contains(generated.pos)) {
             continue;
         }
 
@@ -405,7 +470,7 @@ void World::process_completed_chunks() { // on main thread
         }
 
 
-        chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(generated.mesh_data)));
+        chunk.mesh = get_or_create_chunk_mesh(std::move(generated.mesh_data));
 
         chunk.dirty = false;
         chunk.object = std::make_unique<Object>(
@@ -423,14 +488,6 @@ void World::process_completed_chunks() { // on main thread
 }
 
 void World::update_chunks() {
-    glm::mat4 camera_transform = glm::translate(
-        glm::mat4(1.0f),
-        scene.cam_pos
-    ) * glm::mat4_cast(scene.cam_orientation);
-    glm::vec3 camera_forward = glm::normalize(glm::vec3(
-        camera_transform * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)
-    ));
-
     int camera_chunk_x = static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X));
     int camera_chunk_y = static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
@@ -511,16 +568,18 @@ void World::update_chunks() {
     process_completed_chunks();
 
 
-    std::vector<Mesh> old_meshes;
+    std::vector<std::shared_ptr<Mesh>> old_meshes;
 
     if (camera_chunk_changed) {
         for (const auto& [pos, chunk] : chunks) {
             int dx = pos.x - camera_chunk_x;
             int dy = pos.y - camera_chunk_y;
             int dz = pos.z - camera_chunk_z;
+            // TODO: make the underground chunk eviction logic work with higher ground levels
             const bool underground_too_far = pos.y < 0 &&
                 (std::abs(dx) > UNDERGROUND_STREAM_DISTANCE ||
                  std::abs(dz) > UNDERGROUND_STREAM_DISTANCE);
+                 
             if (std::abs(dx) > RENDER_DISTANCE ||
                 std::abs(dy) > VERTICAL_RENDER_DISTANCE ||
                 std::abs(dz) > RENDER_DISTANCE ||
@@ -576,8 +635,7 @@ void World::update_chunks() {
             scene.remove_object_from_scene(chunk.object.get());
         }
         if (chunk.mesh) {
-            old_meshes.push_back(std::move(*chunk.mesh));
-            chunk.mesh.reset();
+            old_meshes.push_back(std::move(chunk.mesh));
         }
         chunks.erase(chunk_it);
         ++removals_this_frame;
@@ -610,8 +668,7 @@ void World::update_chunks() {
                 }
             }
             if (chunk.mesh) {
-                old_meshes.push_back(std::move(*chunk.mesh));
-                chunk.mesh.reset();
+                old_meshes.push_back(std::move(chunk.mesh));
             }
 
             if (empty_chunk) {
@@ -623,7 +680,7 @@ void World::update_chunks() {
                 continue;
             }
 
-            chunk.mesh = std::make_unique<Mesh>(renderer.load_mesh(std::move(mesh_data)));
+            chunk.mesh = get_or_create_chunk_mesh(std::move(mesh_data));
             if (!chunk.object) {
                 chunk.object = std::make_unique<Object>(
                     chunk.mesh.get(),
@@ -668,7 +725,28 @@ void World::update_chunks() {
 
     // All new meshes have now been loaded.
     // Now the old Mesh objects can safely be destroyed.
-    renderer.destroy_meshes(old_meshes);
+    std::vector<Mesh> meshes_to_destroy;
+    for (const std::shared_ptr<Mesh>& mesh : old_meshes) {
+        if (mesh.use_count() != 1) {
+            continue;
+        }
+
+        const std::size_t hash = hash_mesh_data(mesh->data);
+        auto cache_entry = chunk_mesh_cache.find(hash);
+        if (cache_entry != chunk_mesh_cache.end()) {
+            auto& candidates = cache_entry->second;
+            candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&mesh](const std::weak_ptr<Mesh>& candidate) {
+                const std::shared_ptr<Mesh> cached_mesh = candidate.lock();
+                return !cached_mesh || cached_mesh.get() == mesh.get();
+            }), candidates.end());
+            if (candidates.empty()) {
+                chunk_mesh_cache.erase(cache_entry);
+            }
+        }
+
+        meshes_to_destroy.push_back(std::move(*mesh));
+    }
+    renderer.destroy_meshes(std::move(meshes_to_destroy));
 
 
     // Frustum culling
@@ -679,9 +757,29 @@ void World::update_chunks() {
     const float half_z = CHUNK_SIZE_Z * 0.5f;
     const float chunk_radius = std::sqrt(half_x * half_x + half_y * half_y + half_z * half_z);
 
+    auto neighbor_face_is_solid = [this](ChunkPos neighbor_pos, ChunkFace face) {
+        const auto neighbor = chunks.find(neighbor_pos);
+        return neighbor != chunks.end() && neighbor->second.has_fully_solid_face(face);
+    };
+
     for (const auto& [pos, chunk] : chunks) {
         if (!chunk.object) {
             continue;
+        }
+        if (camera_chunk_changed) {
+            const bool is_camera_chunk = pos.x == camera_chunk_x &&
+                pos.y == camera_chunk_y && pos.z == camera_chunk_z;
+            const bool fully_surrounded = !is_camera_chunk &&
+                neighbor_face_is_solid({pos.x - 1, pos.y, pos.z}, ChunkFace::PosX) &&
+                neighbor_face_is_solid({pos.x + 1, pos.y, pos.z}, ChunkFace::NegX) &&
+                neighbor_face_is_solid({pos.x, pos.y - 1, pos.z}, ChunkFace::PosY) &&
+                neighbor_face_is_solid({pos.x, pos.y + 1, pos.z}, ChunkFace::NegY) &&
+                neighbor_face_is_solid({pos.x, pos.y, pos.z - 1}, ChunkFace::PosZ) &&
+                neighbor_face_is_solid({pos.x, pos.y, pos.z + 1}, ChunkFace::NegZ);
+            if (fully_surrounded) {
+                chunk.object->visible = false;
+                continue;
+            }
         }
 
         glm::vec3 chunk_center((pos.x + 0.5f) * CHUNK_SIZE_X, (pos.y + 0.5f) * CHUNK_SIZE_Y, (pos.z + 0.5f) * CHUNK_SIZE_Z);
