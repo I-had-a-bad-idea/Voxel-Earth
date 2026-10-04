@@ -488,14 +488,6 @@ void World::process_completed_chunks() { // on main thread
 }
 
 void World::update_chunks() {
-    glm::mat4 camera_transform = glm::translate(
-        glm::mat4(1.0f),
-        scene.cam_pos
-    ) * glm::mat4_cast(scene.cam_orientation);
-    glm::vec3 camera_forward = glm::normalize(glm::vec3(
-        camera_transform * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)
-    ));
-
     int camera_chunk_x = static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X));
     int camera_chunk_y = static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y));
     int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
@@ -583,9 +575,11 @@ void World::update_chunks() {
             int dx = pos.x - camera_chunk_x;
             int dy = pos.y - camera_chunk_y;
             int dz = pos.z - camera_chunk_z;
+            // TODO: make the underground chunk eviction logic work with higher ground levels
             const bool underground_too_far = pos.y < 0 &&
                 (std::abs(dx) > UNDERGROUND_STREAM_DISTANCE ||
                  std::abs(dz) > UNDERGROUND_STREAM_DISTANCE);
+                 
             if (std::abs(dx) > RENDER_DISTANCE ||
                 std::abs(dy) > VERTICAL_RENDER_DISTANCE ||
                 std::abs(dz) > RENDER_DISTANCE ||
