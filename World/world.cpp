@@ -1,6 +1,7 @@
 #include "World.h"
 
 namespace {
+
 ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
     return ChunkLOD::LOD0;
     // const int distance = std::max(std::abs(dx), std::max(std::abs(dy), std::abs(dz)));
@@ -31,7 +32,13 @@ World::World(Renderer& renderer_)
 {
     world_data_thread = std::thread(&World::fetch_elevation_tiles, this);
     world_cover_data_thread = std::thread(&World::fetch_world_cover_tiles, this);
-    generation_thread = std::thread(&World::generate_chunks, this);
+    const unsigned int worker_count = std::clamp(
+        std::thread::hardware_concurrency(), 1u, MAX_CHUNK_GENERATION_WORKERS
+    );
+    generation_threads.reserve(worker_count);
+    for (unsigned int worker = 0; worker < worker_count; ++worker) {
+        generation_threads.emplace_back(&World::generate_chunks, this);
+    }
     mesh_update_thread = std::thread(&World::update_chunk_meshes, this);
 }
 
@@ -40,8 +47,10 @@ World::~World() {
         std::lock_guard lock(generation_mutex);
         stop_generation = true;
     }
-    generation_condition.notify_one();
-    generation_thread.join();
+    generation_condition.notify_all();
+    for (std::thread& worker : generation_threads) {
+        worker.join();
+    }
 
     {
         std::lock_guard lock(terrain_cache_mutex);
@@ -113,9 +122,7 @@ void World::fetch_world_cover_tiles() {
 
         WorldCoverTile tile_data;
         try {
-            const int tile_lat = world_cover_tile_lat(coord.x);
-            const int tile_lon = world_cover_tile_lon(coord.y);
-            tile_data = world_cover_fetcher.world_cover_tile_fetch(tile_lat, tile_lon);
+            tile_data = world_cover_fetcher.world_cover_tile_fetch(ELEVATION_ZOOM, coord.x, coord.y);
         } catch (const std::exception& error) {
             std::cerr << "Failed to load world cover tile " << coord.x << ", " << coord.y
                       << ": " << error.what() << ". Using elevation-based surface.\n";
@@ -217,10 +224,8 @@ float World::get_elevation_height(ElevationTileCoordinate coord, int pixel_x, in
 }
 
 LandCover World::get_world_cover(GeoCoordinate geo) {
-    const WorldCoverTileCoordinate coord{
-        world_cover_tile_lat(geo.latitude),
-        world_cover_tile_lon(geo.longitude)
-    };
+    const ElevationTileCoordinate elevation_tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
+    const WorldCoverTileCoordinate coord{elevation_tile.x, elevation_tile.y};
 
     std::unique_lock lock(terrain_cache_mutex);
     auto it = world_cover_tiles.find(coord);
@@ -240,10 +245,9 @@ LandCover World::get_world_cover(GeoCoordinate geo) {
         return LandCover::NoData;
     }
 
-    const double x_fraction = (geo.longitude - coord.y) / 3.0;
-    const double y_fraction = (coord.x + 3.0 - geo.latitude) / 3.0;
-    const int pixel_x = std::clamp(static_cast<int>(x_fraction * tile.width), 0, tile.width - 1);
-    const int pixel_y = std::clamp(static_cast<int>(y_fraction * tile.height), 0, tile.height - 1);
+    const ElevationTileCoordinate pixel = geo_to_elevation_tile_pixel(geo, ELEVATION_ZOOM);
+    const int pixel_x = std::clamp(pixel.x, 0, tile.width - 1);
+    const int pixel_y = std::clamp(pixel.y, 0, tile.height - 1);
     return tile.get_land_cover(pixel_x, pixel_y);
 }
 
@@ -289,17 +293,43 @@ TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
 }
 
 std::vector<TerrainColumn> World::get_chunk_terrain_columns(int chunk_x, int chunk_z) {
-    std::vector<TerrainColumn> columns(CHUNK_SIZE_X * CHUNK_SIZE_Z);
-    for (int x = 0; x < CHUNK_SIZE_X; ++x) {
-        for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
-            const ColumnPos pos{chunk_x * CHUNK_SIZE_X + x, chunk_z * CHUNK_SIZE_Z + z};
-            auto [it, inserted] = terrain_columns.try_emplace(pos);
-            if (inserted) {
-                it->second = generate_terrain_column(pos.x, pos.z);
-            }
-            columns[x + CHUNK_SIZE_X * z] = it->second;
+    const TerrainChunkPos chunk_pos{chunk_x, chunk_z};
+    {
+        std::unique_lock lock(terrain_columns_mutex);
+        terrain_columns_condition.wait(lock, [this, chunk_pos] {
+            return !terrain_chunks_generating.contains(chunk_pos);
+        });
+        if (auto it = terrain_columns.find(chunk_pos); it != terrain_columns.end()) {
+            return it->second;
         }
+        terrain_chunks_generating.insert(chunk_pos);
     }
+
+    std::vector<TerrainColumn> columns(CHUNK_SIZE_X * CHUNK_SIZE_Z);
+    try {
+        for (int x = 0; x < CHUNK_SIZE_X; ++x) {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z) {
+                columns[x + CHUNK_SIZE_X * z] = generate_terrain_column(
+                    chunk_x * CHUNK_SIZE_X + x,
+                    chunk_z * CHUNK_SIZE_Z + z
+                );
+            }
+        }
+    } catch (...) {
+        {
+            std::lock_guard lock(terrain_columns_mutex);
+            terrain_chunks_generating.erase(chunk_pos);
+        }
+        terrain_columns_condition.notify_all();
+        throw;
+    }
+
+    {
+        std::lock_guard lock(terrain_columns_mutex);
+        terrain_columns.emplace(chunk_pos, columns);
+        terrain_chunks_generating.erase(chunk_pos);
+    }
+    terrain_columns_condition.notify_all();
     return columns;
 }
 
@@ -484,8 +514,6 @@ void World::update_chunks() {
     std::vector<Mesh> old_meshes;
 
     if (camera_chunk_changed) {
-        // Remove chunks that are too far away.
-        std::vector<ChunkPos> chunks_to_remove;
         for (const auto& [pos, chunk] : chunks) {
             int dx = pos.x - camera_chunk_x;
             int dy = pos.y - camera_chunk_y;
@@ -497,29 +525,62 @@ void World::update_chunks() {
                 std::abs(dy) > VERTICAL_RENDER_DISTANCE ||
                 std::abs(dz) > RENDER_DISTANCE ||
                 underground_too_far) {
-                chunks_to_remove.push_back(pos);
-            }
-        }
-        for (const ChunkPos& pos : chunks_to_remove) {
-            {
-                std::lock_guard lock(mesh_update_mutex);
-                if (pending_mesh_updates.contains(pos)) {
-                    continue;
+                if (queued_chunk_removals.insert(pos).second) {
+                    chunk_removal_queue.push(pos);
                 }
             }
+        }
+    }
 
-            Chunk& chunk = chunks.at(pos);
-            if (chunk.object) {
-                if (chunk.in_scene) {
-                    scene.remove_object_from_scene(chunk.object.get());
-                }
-            }
-            if (chunk.mesh) {
-                old_meshes.push_back(std::move(*chunk.mesh));
-                chunk.mesh.reset();
-            }
-            chunks.erase(pos);
+    std::size_t removals_this_frame = 0;
+    std::size_t removal_checks_this_frame = 0;
+    const std::size_t max_removal_checks = MAX_CHUNK_REMOVALS_PER_FRAME * 2;
+    while (!chunk_removal_queue.empty() &&
+           removals_this_frame < MAX_CHUNK_REMOVALS_PER_FRAME &&
+           removal_checks_this_frame < max_removal_checks) {
+        const ChunkPos pos = chunk_removal_queue.front();
+        chunk_removal_queue.pop();
+        queued_chunk_removals.erase(pos);
+        ++removal_checks_this_frame;
+
+        auto chunk_it = chunks.find(pos);
+        if (chunk_it == chunks.end()) {
+            continue;
         }
+
+        const int dx = pos.x - camera_chunk_x;
+        const int dy = pos.y - camera_chunk_y;
+        const int dz = pos.z - camera_chunk_z;
+        const bool underground_too_far = pos.y < 0 &&
+            (std::abs(dx) > UNDERGROUND_STREAM_DISTANCE ||
+             std::abs(dz) > UNDERGROUND_STREAM_DISTANCE);
+        if (std::abs(dx) <= RENDER_DISTANCE &&
+            std::abs(dy) <= VERTICAL_RENDER_DISTANCE &&
+            std::abs(dz) <= RENDER_DISTANCE &&
+            !underground_too_far) {
+            continue;
+        }
+
+        {
+            std::lock_guard lock(mesh_update_mutex);
+            if (pending_mesh_updates.contains(pos)) {
+                if (queued_chunk_removals.insert(pos).second) {
+                    chunk_removal_queue.push(pos);
+                }
+                continue;
+            }
+        }
+
+        Chunk& chunk = chunk_it->second;
+        if (chunk.object && chunk.in_scene) {
+            scene.remove_object_from_scene(chunk.object.get());
+        }
+        if (chunk.mesh) {
+            old_meshes.push_back(std::move(*chunk.mesh));
+            chunk.mesh.reset();
+        }
+        chunks.erase(chunk_it);
+        ++removals_this_frame;
     }
 
     // Queue dirty CPU meshing and apply completed results on the render thread.
@@ -636,35 +697,43 @@ void World::update_chunks() {
 
         chunk.object->visible = sphere_in_frustum(scene.frustum, chunk_center, chunk_radius);
     }
-    prefetch_elevation_tiles(camera_chunk_x, camera_chunk_z);
+    if (camera_chunk_changed) {
+        prefetch_world_data_tiles(camera_chunk_x, camera_chunk_z);
+    }
 }
 
-void World::prefetch_elevation_tiles(int camera_chunk_x, int camera_chunk_z) {
-    bool added_tiles = false;
-    // Fetch all elevation tiles that are within the render distance of the camera.
+void World::prefetch_world_data_tiles(int camera_chunk_x, int camera_chunk_z) {
+    bool added_elevation_tiles = false;
+    bool added_world_cover_tiles = false;
+    // Fetch both datasets for every tile within the render distance of the camera.
     for (int dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; ++dx) {
         for (int dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; ++dz) {
             int chunk_x = camera_chunk_x + dx;
             int chunk_z = camera_chunk_z + dz;
             const GeoCoordinate geo = world_to_geo(chunk_x * CHUNK_SIZE_X, chunk_z * CHUNK_SIZE_Z);
-            const ElevationTileCoordinate tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
-            std::lock_guard lock(terrain_cache_mutex);
-            // Already downloaded
-            if (elevation_tiles.contains(tile)) {
-                continue;
+            const ElevationTileCoordinate elevation_tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
+            const WorldCoverTileCoordinate world_cover_tile{elevation_tile.x, elevation_tile.y};
+            {
+                std::lock_guard lock(terrain_cache_mutex);
+                 // If not already downloaded
+                if (!elevation_tiles.contains(elevation_tile) &&
+                    requested_elevation_tiles.insert(elevation_tile).second) {
+                    elevation_tile_queue.push(elevation_tile);
+                    added_elevation_tiles = true;
+                }
+                if (!world_cover_tiles.contains(world_cover_tile) &&
+                    requested_world_cover_tiles.insert(world_cover_tile).second) {
+                    world_cover_tile_queue.push(world_cover_tile);
+                    added_world_cover_tiles = true;
+                }
             }
-
-            // Already queued
-            if (!requested_elevation_tiles.insert(tile).second) {
-                continue;
-            }
-            // Add it to the queue
-            elevation_tile_queue.push(tile);
-            added_tiles = true;
         }
     }
-    if (added_tiles) {
+    if (added_elevation_tiles) {
         elevation_tile_condition.notify_one();
+    }
+    if (added_world_cover_tiles) {
+        world_cover_tile_condition.notify_one();
     }
 }
 
@@ -701,12 +770,15 @@ void World::setup() {
 
 void World::update(float delta_time) {
     update_chunks();
-    // Remove Elevation tiles that are too far away
+    const ElevationTileCoordinate camera_tile = geo_to_elevation_tile(
+        world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)),
+        ELEVATION_ZOOM
+    );
     std::vector<ElevationTileCoordinate> tiles_to_remove;
     std::lock_guard lock(terrain_cache_mutex);
     for (const auto& [coord, tile] : elevation_tiles) {
-        int dx = coord.x - geo_to_elevation_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).x;
-        int dz = coord.y - geo_to_elevation_tile(world_to_geo(static_cast<int>(scene.cam_pos.x), static_cast<int>(scene.cam_pos.z)), ELEVATION_ZOOM).y;
+        const int dx = coord.x - camera_tile.x;
+        const int dz = coord.y - camera_tile.y;
         if (std::abs(dx) > ELEVATION_TILE_CACHE_DISTANCE || std::abs(dz) > ELEVATION_TILE_CACHE_DISTANCE) {
             tiles_to_remove.push_back(coord);
         }
@@ -716,6 +788,17 @@ void World::update(float delta_time) {
         elevation_tiles.erase(coord);
     }
 
+    std::vector<WorldCoverTileCoordinate> world_cover_tiles_to_remove;
+    for (const auto& [coord, tile] : world_cover_tiles) {
+        const int dx = coord.x - camera_tile.x;
+        const int dy = coord.y - camera_tile.y;
+        if (std::abs(dx) > ELEVATION_TILE_CACHE_DISTANCE || std::abs(dy) > ELEVATION_TILE_CACHE_DISTANCE) {
+            world_cover_tiles_to_remove.push_back(coord);
+        }
+    }
+    for (const WorldCoverTileCoordinate& coord : world_cover_tiles_to_remove) {
+        world_cover_tiles.erase(coord);
+    }
 }
 
 Scene& World::get_scene() {

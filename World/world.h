@@ -26,6 +26,8 @@ constexpr float player_half_width = 0.3f;
 
 
 constexpr int MAX_NEW_REQUESTS_PER_FRAME = 16;
+constexpr unsigned int MAX_CHUNK_GENERATION_WORKERS = 4;
+constexpr int MAX_CHUNK_REMOVALS_PER_FRAME = 16;
 
 constexpr int RENDER_DISTANCE = 35;
 constexpr int VERTICAL_RENDER_DISTANCE = 20;
@@ -40,17 +42,17 @@ struct PlayerObject {
 };
 
 class World {
-    struct ColumnPos {
+    struct TerrainChunkPos {
         int x;
         int z;
 
-        bool operator==(const ColumnPos& other) const {
+        bool operator==(const TerrainChunkPos& other) const {
             return x == other.x && z == other.z;
         }
     };
 
-    struct ColumnPosHash {
-        std::size_t operator()(const ColumnPos& pos) const {
+    struct TerrainChunkPosHash {
+        std::size_t operator()(const TerrainChunkPos& pos) const {
             return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.z) << 1);
         }
     };
@@ -100,7 +102,10 @@ class World {
     std::unordered_map<ChunkPos, std::vector<PendingBlockEdit>, ChunkPosHash> pending_block_edits;
     
 
-    std::unordered_map<ColumnPos, TerrainColumn, ColumnPosHash> terrain_columns;
+    std::unordered_map<TerrainChunkPos, std::vector<TerrainColumn>, TerrainChunkPosHash> terrain_columns;
+    std::mutex terrain_columns_mutex;
+    std::condition_variable terrain_columns_condition;
+    std::unordered_set<TerrainChunkPos, TerrainChunkPosHash> terrain_chunks_generating;
     std::unordered_map<ElevationTileCoordinate, ElevationTile, ElevationTileCoordinateHash> elevation_tiles;
     std::unordered_map<WorldCoverTileCoordinate, WorldCoverTile, WorldCoverTileCoordinateHash> world_cover_tiles;
 
@@ -122,6 +127,8 @@ class World {
 
     std::vector<ChunkPos> new_requests;
     int next_new_request = 0;
+    std::queue<ChunkPos> chunk_removal_queue;
+    std::unordered_set<ChunkPos, ChunkPosHash> queued_chunk_removals;
 
     std::mutex generation_mutex;
     std::condition_variable generation_condition;
@@ -134,7 +141,7 @@ class World {
     ChunkPos last_stream_camera_chunk {0, 0, 0};
     bool has_stream_camera_chunk {false};
     bool mesh_updates_needed {false};
-    std::thread generation_thread;
+    std::vector<std::thread> generation_threads;
     bool stop_generation {false};
 
     std::mutex mesh_update_mutex;
@@ -147,7 +154,7 @@ class World {
 
     void generate_chunks();
     void update_chunk_meshes();
-    void prefetch_elevation_tiles(int camera_chunk_x, int camera_chunk_z);
+    void prefetch_world_data_tiles(int camera_chunk_x, int camera_chunk_z);
     void fetch_elevation_tiles();
     void fetch_world_cover_tiles();
     TerrainColumn generate_terrain_column(int world_x, int world_z);
