@@ -767,6 +767,9 @@ void World::update_chunks() {
             continue;
         }
         if (camera_chunk_changed) {
+            continue; // Deactivated this logic, since it only affects underground chunks (which are most of the time, really cheap (greedy meshing))
+            // And because it caused huge lag spikes when crossing chunk boundaries
+
             const bool is_camera_chunk = pos.x == camera_chunk_x &&
                 pos.y == camera_chunk_y && pos.z == camera_chunk_z;
             const bool fully_surrounded = !is_camera_chunk &&
