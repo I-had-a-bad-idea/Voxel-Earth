@@ -169,7 +169,7 @@ class World {
     std::shared_ptr<Mesh> get_or_create_chunk_mesh(MeshData&& mesh_data);
     void queue_chunk_generation(ChunkPos pos);
     void process_completed_chunks();
-    float get_elevation_height(ElevationTileCoordinate coord, int pixel_x, int pixel_y);
+    float get_elevation_height(GeoCoordinate geo);
     LandCover get_world_cover(GeoCoordinate geo);
 
     public:

@@ -249,20 +249,57 @@ void World::update_chunk_meshes() {
     }
 }
 
-float World::get_elevation_height(ElevationTileCoordinate coord, int pixel_x, int pixel_y) {
+float World::get_elevation_height(GeoCoordinate geo) {
+    const double latitude = std::clamp(geo.latitude, -85.05112878, 85.05112878);
+    const int tile_count = 1 << ELEVATION_ZOOM;
+
+    const double world_x = (geo.longitude + 180.0) / 360.0 * tile_count;
+    const double wrapped_world_x = std::fmod(world_x, static_cast<double>(tile_count));
+    const double normalized_world_x = wrapped_world_x < 0.0 ? wrapped_world_x + tile_count : wrapped_world_x;
+    const double latitude_radians = latitude * PI / 180.0;
+    
+    const double world_y = (1.0 - std::asinh(std::tan(latitude_radians)) / PI) / 2.0 * tile_count;
+    const double pixel_x = normalized_world_x * ElevationTile::SIZE;
+    const double pixel_y = world_y * ElevationTile::SIZE;
+    
+    const int x0 = static_cast<int>(std::floor(pixel_x));
+    const int y0 = static_cast<int>(std::floor(pixel_y));
+    const float x_fraction = static_cast<float>(pixel_x - x0);
+    const float y_fraction = static_cast<float>(pixel_y - y0);
+    const int world_pixel_width = tile_count * ElevationTile::SIZE;
+
     std::unique_lock lock(terrain_cache_mutex);
-    auto it = elevation_tiles.find(coord);
-    if (it == elevation_tiles.end()) {
-        if (requested_elevation_tiles.insert(coord).second) {
-            elevation_tile_queue.push(coord);
-            elevation_tile_condition.notify_one();
+    auto get_pixel = [this, &lock, world_pixel_width](int x, int y) {
+        const int wrapped_x = (x % world_pixel_width + world_pixel_width) % world_pixel_width;
+        const int clamped_y = std::clamp(y, 0, world_pixel_width - 1);
+        const ElevationTileCoordinate coord{
+            wrapped_x / ElevationTile::SIZE,
+            clamped_y / ElevationTile::SIZE
+        };
+        auto it = elevation_tiles.find(coord);
+        if (it == elevation_tiles.end()) {
+            if (requested_elevation_tiles.insert(coord).second) {
+                elevation_tile_queue.push(coord);
+                elevation_tile_condition.notify_one();
+            }
+            elevation_tile_condition.wait(lock, [this, coord] {
+                return elevation_tiles.contains(coord);
+            });
+            it = elevation_tiles.find(coord);
         }
-        elevation_tile_condition.wait(lock, [this, coord] {
-            return elevation_tiles.contains(coord);
-        });
-        it = elevation_tiles.find(coord);
-    }
-    return it->second.get(pixel_x, pixel_y);
+        return it->second.get(
+            wrapped_x % ElevationTile::SIZE,
+            clamped_y % ElevationTile::SIZE
+        );
+    };
+
+    const float top_left = get_pixel(x0, y0);
+    const float top_right = get_pixel(x0 + 1, y0);
+    const float bottom_left = get_pixel(x0, y0 + 1);
+    const float bottom_right = get_pixel(x0 + 1, y0 + 1);
+    const float top = top_left + (top_right - top_left) * x_fraction;
+    const float bottom = bottom_left + (bottom_right - bottom_left) * x_fraction;
+    return top + (bottom - top) * y_fraction;
 }
 
 LandCover World::get_world_cover(GeoCoordinate geo) {
@@ -298,9 +335,7 @@ TerrainColumn World::generate_terrain_column(int world_x, int world_z) {
     const GeoCoordinate geo = world_to_geo(world_x, world_z);
     
     // Elevation
-    const ElevationTileCoordinate tile = geo_to_elevation_tile(geo, ELEVATION_ZOOM);
-    const ElevationTileCoordinate pixel = geo_to_elevation_tile_pixel(geo, ELEVATION_ZOOM);
-    const float height_f = get_elevation_height(tile, pixel.x, pixel.y);
+    const float height_f = get_elevation_height(geo);
 
 
     TerrainColumn column;
