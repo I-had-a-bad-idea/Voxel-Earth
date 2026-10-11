@@ -113,17 +113,12 @@ Voxel-Earth is currently in development. The project is not yet complete, and th
 
 ### Known problems
 
-The biggest problem you will encounter, is that the land-cover data is currently fetched in huge 3°x3° tiles, which means that the game will download a lot of data at once. This is not a problem for the elevation data, as it is fetched in 256mx256m tile.
-This also means, that the first chunk will take a long time to be generated.
-
 The second biggest one is, that the world looks bad. This is caused by
 a) me using a custom renderer, which makes anti-aliasing and good lighting difficult
-b) the unprecise data (elevation data is accurate to ~4m and land-cover data to ~10m)
+b) the unprecise land-cover data (accurate to ~10m)
 c) the land-cover data currently being directly used for the blocks (which leads to 8 different block types)
 
 Then of course the server is only locally and not directly open to network.
-
-Lastly the source data is not precise to 1 meter, which leads to less detail, which could be fixed by interpolating, which is currently not done.
 
 ## Licenses
 
