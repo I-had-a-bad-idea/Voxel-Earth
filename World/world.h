@@ -133,7 +133,7 @@ class World {
 
 
     std::vector<ChunkPos> new_requests;
-    int next_new_request = 0;
+    std::size_t next_new_request = 0;
     std::queue<ChunkPos> chunk_removal_queue;
     std::unordered_set<ChunkPos, ChunkPosHash> queued_chunk_removals;
 

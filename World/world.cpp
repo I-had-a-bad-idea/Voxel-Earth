@@ -26,6 +26,26 @@ ChunkLOD lod_for_chunk_distance(int dx, int dy, int dz) {
     // return ChunkLOD::LOD6;
 }
 
+bool chunk_is_in_stream_range(ChunkPos pos, int camera_chunk_x, int camera_chunk_y, int camera_chunk_z) {
+    const int dx = pos.x - camera_chunk_x;
+    const int dz = pos.z - camera_chunk_z;
+    const int horizontal_distance = std::max(std::abs(dx), std::abs(dz));
+    const bool in_horizontal_range =
+        dx * dx + dz * dz <= RENDER_DISTANCE * RENDER_DISTANCE;
+
+    if (!in_horizontal_range) {
+        return false;
+    }
+    if (pos.y == 0) {
+        return true;
+    }
+
+    const int minimum_y = horizontal_distance > UNDERGROUND_STREAM_DISTANCE
+        ? std::max(0, camera_chunk_y - VERTICAL_RENDER_DISTANCE)
+        : camera_chunk_y - VERTICAL_RENDER_DISTANCE;
+    return pos.y >= minimum_y && pos.y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE;
+}
+
 std::size_t hash_mesh_data(const MeshData& mesh_data) {
     std::size_t hash = mesh_data.vertices.size();
     auto combine = [&hash](uint32_t value) {
@@ -470,6 +490,13 @@ void World::process_completed_chunks() { // on main thread
             continue;
         }
 
+        const int camera_chunk_x = static_cast<int>(std::floor(scene.cam_pos.x / CHUNK_SIZE_X));
+        const int camera_chunk_y = static_cast<int>(std::floor(scene.cam_pos.y / CHUNK_SIZE_Y));
+        const int camera_chunk_z = static_cast<int>(std::floor(scene.cam_pos.z / CHUNK_SIZE_Z));
+        if (!chunk_is_in_stream_range(
+                generated.pos, camera_chunk_x, camera_chunk_y, camera_chunk_z)) {
+            continue;
+        }
 
         // add to chunk list
         auto [it, inserted] = chunks.emplace(generated.pos, std::move(*generated.chunk));
@@ -539,9 +566,32 @@ void World::update_chunks() {
         generation_camera_chunk_y.store(camera_chunk_y, std::memory_order_relaxed);
         generation_camera_chunk_z.store(camera_chunk_z, std::memory_order_relaxed);
 
+        // Discard unsubmitted requests from the previous camera position.
+        new_requests.clear();
+        next_new_request = 0;
+
+        // Keep queued work that is still useful, dropping work outside the current stream.
+        std::queue<ChunkPos> remaining_generation_requests;
+        {
+            std::lock_guard lock(generation_mutex);
+            while (!generation_queue.empty()) {
+                const ChunkPos pos = generation_queue.front();
+                generation_queue.pop();
+
+                if (chunk_is_in_stream_range(pos, camera_chunk_x, camera_chunk_y, camera_chunk_z)) {
+                    remaining_generation_requests.push(pos);
+                } else {
+                    requested_chunks.erase(pos);
+                }
+            }
+            generation_queue.swap(remaining_generation_requests);
+        }
+
         new_requests.push_back({camera_chunk_x, 0, camera_chunk_z});
         for (int y = camera_chunk_y - VERTICAL_RENDER_DISTANCE; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
-            new_requests.push_back({camera_chunk_x, y, camera_chunk_z});
+            if (y != 0) {
+                new_requests.push_back({camera_chunk_x, y, camera_chunk_z});
+            }
         }
 
         for (int step = 1; step <= RENDER_DISTANCE; ++step) {
@@ -564,7 +614,9 @@ void World::update_chunks() {
                 }
 
                 for (int y = start_y; y <= camera_chunk_y + VERTICAL_RENDER_DISTANCE; ++y) {
-                    new_requests.push_back({x, y, z});
+                    if (y != 0) {
+                        new_requests.push_back({x, y, z});
+                    }
                 }
             };
 
@@ -592,7 +644,6 @@ void World::update_chunks() {
         queue_chunk_generation(new_requests[next_new_request]);
         next_new_request++;
         requests_this_frame++;
-        
     }
 
     if (next_new_request == new_requests.size()) {
@@ -758,6 +809,18 @@ void World::update_chunks() {
         mesh_updates_needed = false;
     }
 
+    if (camera_chunk_changed) {
+        std::lock_guard lock(terrain_columns_mutex);
+        for (auto it = terrain_columns.begin(); it != terrain_columns.end();) {
+            if (std::abs(it->first.x - camera_chunk_x) > RENDER_DISTANCE ||
+                std::abs(it->first.z - camera_chunk_z) > RENDER_DISTANCE) {
+                it = terrain_columns.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
     // All new meshes have now been loaded.
     // Now the old Mesh objects can safely be destroyed.
     std::vector<Mesh> meshes_to_destroy;
@@ -823,10 +886,8 @@ void World::update_chunks() {
         glm::vec3 chunk_center((pos.x + 0.5f) * CHUNK_SIZE_X, (pos.y + 0.5f) * CHUNK_SIZE_Y, (pos.z + 0.5f) * CHUNK_SIZE_Z);
 
         glm::vec3 to_chunk = chunk_center - scene.cam_pos;
-        float distance = glm::length(to_chunk);
-
         // Camera is inside/very close to the chunk.
-        if (distance <= chunk_radius) {
+        if (glm::dot(to_chunk, to_chunk) <= chunk_radius * chunk_radius) {
             chunk.object->visible = true;
             continue;
         }
